@@ -4,7 +4,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QGridLayout
 from PySide6.QtCore import QSize, Qt
 
 class UIValve:
-    def __init__(self, parent, layout, smcdevnet, nr):
+    def __init__(self, parent, smcdevnet, nr):
         self.parent = parent
         self.smcdevnet = smcdevnet
         self.nr = nr
@@ -26,10 +26,6 @@ class UIValve:
         """)
 
         self.btn.clicked.connect(self.toggle_on_off)
-
-        row = ((nr - 1) // 5) + 1
-        col = (nr - 1) % 5
-        layout.addWidget(self.btn, row, col, Qt.AlignmentFlag.AlignCenter)
 
     def toggle_on_off(self):
         self.status = self.smcdevnet.get_status(self.nr)

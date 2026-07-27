@@ -2,7 +2,7 @@ import can
 import subprocess
 import time
 
-# error handling
+# connect at every function to avoid timeout errors
 
 # check vendor id and serial number
 
@@ -26,7 +26,6 @@ class SmcDevNet:
             time.sleep(0.5) 
             print("CAN interface is up.")
         except subprocess.CalledProcessError as e:
-            print(f"Failed to bring up CAN interface: {e}")
             raise
 
     def ip_link_down(self):
@@ -35,7 +34,6 @@ class SmcDevNet:
             time.sleep(0.5)
             print("CAN interface is down.")
         except subprocess.CalledProcessError as e:
-            print(f"Failed to bring down CAN interface: {e}")
             raise
 
     # Duplicate check must be passed before going on-line
@@ -56,10 +54,10 @@ class SmcDevNet:
             # Wait at least 1 second
             reply = self.bus.recv(1.0)
             if reply is not None and reply.arbitration_id == id:
-                print("Duplicate DeviceNet ID detected")
-                return 1
+                raise RuntimeError(
+                    f"Duplicate DeviceNet ID detected! MAC ID {self.pi_id >> 3} is already in use on the network."
+                )
         print("No duplicate DeviceNet ID detected.")
-        return 0
 
     def connect_devicenet(self):
         # Group, Destination, Predefined Master/Slave Connection Management Message
@@ -76,9 +74,11 @@ class SmcDevNet:
         if reply is not None:
             print("DeviceNet connected.")
         else:
-            print("No response received for DeviceNet connection request.")
+            raise RuntimeError("No response received for DeviceNet connection request.")
 
     def disconnect_devicenet(self):
+        self.connect_devicenet()
+
         # Group, Destination, Predefined Master/Slave Connection Management Message
         id = self.gr_2_id | self.smc_id | 6
 
@@ -93,9 +93,11 @@ class SmcDevNet:
         if reply is not None:
             print("DeviceNet disconnected.")
         else:
-            print("No response received for DeviceNet disconnection request.")
+            raise RuntimeError("No response received for DeviceNet disconnection request.")
     
     def get_status(self, channel):
+        self.connect_devicenet()
+        
         # Group, Destination, Transmit message across explicit connection
         id = self.gr_2_id | self.smc_id | 4
 
@@ -108,10 +110,11 @@ class SmcDevNet:
             print(f"Channel {channel} has status: {reply.data[2]}")
             return reply.data[2]
         else: 
-            print(f"No response received for channel {channel} status request.")
-            return -1
+            raise RuntimeError(f"No response received for channel {channel} status request.")
         
     def get_status_all(self):
+        self.connect_devicenet()
+
         # Group, Destination, Transmit message across explicit connection
         id = self.gr_2_id | self.smc_id | 4
 
@@ -125,10 +128,11 @@ class SmcDevNet:
             print(f"32 Solenoid Output Points Status: {res:024b}")
             return res
         else: 
-            print(f"No response received for status request.")
-            return -1       
-
+            raise RuntimeError(f"No response received for status request.")
+                 
     def open_valve(self, channel):
+        self.connect_devicenet()
+
         # Group, Destination, Transmit message across explicit connection
         id = self.gr_2_id | self.smc_id | 4
 
@@ -140,9 +144,11 @@ class SmcDevNet:
         if reply is not None:
             print(f"Channel {channel} activated.")
         else:
-            print(f"No response received for channel {channel} activation request.")
+            raise RuntimeError(f"No response received for channel {channel} activation request.")
 
     def open_all(self):
+        self.connect_devicenet()
+
         # Group, Destination, Transmit message across explicit connection
         id = self.gr_2_id | self.smc_id | 4
 
@@ -154,9 +160,11 @@ class SmcDevNet:
         if reply is not None:
             print(f"Channels activated.")
         else:
-            print(f"No response received for channel activation request.")
+            raise RuntimeError(f"No response received for channel activation request.")
 
     def close_valve(self, channel):
+        self.connect_devicenet()
+
         # Group, Destination, Transmit message across explicit connection
         id = self.gr_2_id | self.smc_id | 4
 
@@ -168,9 +176,11 @@ class SmcDevNet:
         if reply is not None:
             print(f"Channel {channel} deactivated.")
         else:
-            print(f"No response received for channel {channel} deactivation request.")
+            raise RuntimeError(f"No response received for channel {channel} deactivation request.")
 
     def close_all(self):
+        self.connect_devicenet()
+
         # Group, Destination, Transmit message across explicit connection
         id = self.gr_2_id | self.smc_id | 4
 
@@ -182,33 +192,42 @@ class SmcDevNet:
         if reply is not None:
             print(f"Channels deactivated.")
         else:
-            print(f"No response received for channel deactivation request.")
+            raise RuntimeError("No response received for channel deactivation request.")
 
     def start(self):
-        self.ip_link_down()
-        self.ip_link_up()
-        self.bus = can.interface.Bus(
-            channel='can0', 
-            interface='socketcan', 
-            bitrate=self.bitrate)
-        if self.duplicate_devicenet():
-            print("Failed to start.")
+        try:
+            self.ip_link_down()
+            self.ip_link_up()
+            self.bus = can.interface.Bus(
+                channel='can0', 
+                interface='socketcan', 
+                bitrate=self.bitrate)
+        except Exception as e:
+            print(e)
+            raise
+        try:
+            self.duplicate_devicenet()
+            time.sleep(1.0)
+            self.connect_devicenet()
+        except Exception as e:
+            print(e)
             self.bus.shutdown()
             self.bus = None
             self.ip_link_down()
-            return 0
-        time.sleep(1.0)
-        self.connect_devicenet()
-        return 1
+            raise
 
     def stop(self):
-        self.close_all()
-        self.disconnect_devicenet()
-        self.bus.shutdown()
-        self.bus = None
-        self.ip_link_down()
+        try:
+            self.close_all()
+            self.disconnect_devicenet()
+            self.bus.shutdown()
+            self.bus = None
+            self.ip_link_down()
+        except Exception as e:
+            print(e)
+            raise
 
-# use case
+
 if __name__ == "__main__":
     smc_devnet = SmcDevNet()
     smc_devnet.start()

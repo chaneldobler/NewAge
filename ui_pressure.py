@@ -6,7 +6,7 @@ import keller_worker
 import keller
 
 class UIPressure:
-    def __init__(self, parent, layout, nr):
+    def __init__(self, parent, nr):
         self.parent = parent
         self.nr = nr
 
@@ -28,10 +28,6 @@ class UIPressure:
                 background-color: #222222;
             }}
         """)
-
-        row = ((nr - 1) // 5) * 3
-        col = (nr - 1) % 5
-        layout.addWidget(self.btn, row, col, Qt.AlignmentFlag.AlignCenter)
 
     def set_value(self, val: float):
         self.btn.setText(f"{self.nr}\n{val:.2f} bar")

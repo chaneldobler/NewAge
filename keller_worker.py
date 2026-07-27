@@ -5,7 +5,7 @@ class KellerWorker(QThread):
     # sends (pressure_val) back to the GUI
     pressure_update = Signal(float)
 
-    def __init__(self, keller, interval_sec=0.5):
+    def __init__(self, keller, interval_sec=1):
         super().__init__()
         self.keller = keller
         self.interval_sec = interval_sec
