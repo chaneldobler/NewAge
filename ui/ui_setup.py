@@ -1,10 +1,8 @@
 import sys
 import PySide6.QtWidgets as QtWidgets
-import ui_valve as valve
-import ui_pressure as pressure
-from keller_worker import PressureWorker
-from keller import Keller
-import smc
+from ui import ui_valve, ui_pressure
+from workers import keller_worker
+from hardware import keller, smc
 
 # object to hold 10 keller sensors
 
@@ -14,8 +12,8 @@ if __name__ == "__main__":
     smcdevnet = smc.SmcDevNet()
     smcdevnet.start()
 
-    keller_sensor = Keller()
-    worker = PressureWorker(keller_sensor)
+    keller_sensor = keller.Keller()
+    worker = keller_worker.KellerWorker(keller_sensor)
 
     app = QtWidgets.QApplication(sys.argv)
 
@@ -35,9 +33,9 @@ if __name__ == "__main__":
     valves = []
     pressures = []
     for i in range(10):
-        v = valve.UIValve(grid_container, grid_layout, smcdevnet, i + 1)
+        v = ui_valve.UIValve(grid_container, grid_layout, smcdevnet, i + 1)
         valves.append(v)
-        p = pressure.UIPressure(grid_container, grid_layout, i + 1)
+        p = ui_pressure.UIPressure(grid_container, grid_layout, i + 1)
         pressures.append(p)
 
     def handle_pressure_update(val: float):

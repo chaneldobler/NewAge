@@ -2,8 +2,8 @@ import sys
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QGridLayout
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor
-from keller_worker import PressureWorker
-from keller import Keller
+from workers import keller_worker
+from hardware import keller
 
 class UIPressure:
     def __init__(self, parent, layout, nr):
@@ -37,8 +37,8 @@ class UIPressure:
         self.btn.setText(f"{self.nr}\n{val:.2f} bar")
 
 if __name__ == "__main__":
-    keller_sensor = Keller()
-    worker = PressureWorker(keller_sensor)
+    keller_sensor = keller.Keller()
+    worker = keller_worker.KellerWorker(keller_sensor)
 
     app = QApplication(sys.argv)
     window = QWidget()

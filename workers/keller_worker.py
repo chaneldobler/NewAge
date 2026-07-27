@@ -1,7 +1,7 @@
 import time
 from PySide6.QtCore import QThread, Signal
 
-class PressureWorker(QThread):
+class KellerWorker(QThread):
     # sends (pressure_val) back to the GUI
     pressure_updated = Signal(float)
 
