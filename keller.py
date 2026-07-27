@@ -1,0 +1,45 @@
+from smbus2 import SMBus, i2c_msg
+import time
+
+class Keller: 
+    min = 0.0
+    max = 3.0
+    bus = SMBus(bus=1) 
+    request_measurement = 0xAC
+
+    def __init__(self, addr=0x40):
+        self.addr = addr
+
+    def get_pressure(self):
+        try:
+            self.bus.write_byte(i2c_addr=self.addr, value=self.request_measurement)
+
+            time.sleep(0.01) # Wait >= 8ms
+
+            msg = i2c_msg.read(address=self.addr, length=3)
+            self.bus.i2c_rdwr(msg)
+            status, p_msb, p_lsb = msg
+
+            p = (p_msb << 8) | p_lsb 
+            pressure = (p - 16384) * (self.max - self.min) / 32768 + self.min
+            
+            if status & 0x04: # memory errors are indicated at bit 2
+                print("Warning: Sensor memory checksum error detected.") 
+            
+            print(f"Pressure: {pressure:.4f} bar")
+            return pressure
+
+        except Exception as e:
+            print(f"An error occured while reading the pressure: {e}")
+            raise
+        
+if __name__ == "__main__":
+    keller = Keller()
+    try:
+        while True:
+            keller.get_pressure()
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("Program terminated by user.")
+    except Exception as e:
+        print(f"Program stopped due to error: {e}")
