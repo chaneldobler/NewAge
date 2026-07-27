@@ -4,11 +4,11 @@ import time
 class Keller: 
     min = 0.0
     max = 3.0
-    bus = SMBus(bus=1) 
     request_measurement = 0xAC
 
-    def __init__(self, addr=0x40):
+    def __init__(self, addr=0x40, bus=None):
         self.addr = addr
+        self.bus = bus or SMBus(bus=1) # Fallback if bus is None
 
     def get_pressure(self):
         try:
@@ -32,6 +32,22 @@ class Keller:
         except Exception as e:
             print(f"An error occured while reading the pressure: {e}")
             raise
+
+class KellerCollection:
+    len = 10
+    bus = SMBus(bus=1) 
+
+    def __init__(self):
+        self.sensors = [Keller(addr=0x40 + i, bus=self.bus) for i in range(self.len)]
+
+    def read_all(self):
+        pressures = []
+        for i in range(self.len):
+            try:
+                pressure = self.sensors[i].get_pressure()
+                pressures.append(pressure)
+            except:
+                pressures.append(None)
         
 if __name__ == "__main__":
     keller = Keller()

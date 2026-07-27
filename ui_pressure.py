@@ -2,8 +2,8 @@ import sys
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QGridLayout
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor
-from workers import keller_worker
-from hardware import keller
+import keller_worker
+import keller
 
 class UIPressure:
     def __init__(self, parent, layout, nr):
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     def handle_pressure_update(val: float):
         pressure.set_value(val)
 
-    worker.pressure_updated.connect(handle_pressure_update)
+    worker.pressure_update.connect(handle_pressure_update)
     worker.start()
 
     window.show()

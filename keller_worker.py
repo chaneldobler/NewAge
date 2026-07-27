@@ -3,7 +3,7 @@ from PySide6.QtCore import QThread, Signal
 
 class KellerWorker(QThread):
     # sends (pressure_val) back to the GUI
-    pressure_updated = Signal(float)
+    pressure_update = Signal(float)
 
     def __init__(self, keller, interval_sec=0.5):
         super().__init__()
@@ -15,7 +15,7 @@ class KellerWorker(QThread):
         """Runs in a background thread."""
         while self.running:
             val = self.keller.get_pressure()
-            self.pressure_updated.emit(val)
+            self.pressure_update.emit(val)
             time.sleep(self.interval_sec)
 
     def stop(self):

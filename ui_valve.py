@@ -1,5 +1,5 @@
 import sys
-from hardware import smc
+import smc
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QGridLayout
 from PySide6.QtCore import QSize, Qt
 

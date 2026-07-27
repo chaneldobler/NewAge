@@ -1,8 +1,8 @@
 import sys
 import PySide6.QtWidgets as QtWidgets
-from ui import ui_valve, ui_pressure
-from workers import keller_worker
-from hardware import keller, smc
+import ui_valve, ui_pressure
+import keller_worker
+import keller, smc
 
 # object to hold 10 keller sensors
 
@@ -41,7 +41,7 @@ if __name__ == "__main__":
     def handle_pressure_update(val: float):
         pressures[0].set_value(val)
 
-    worker.pressure_updated.connect(handle_pressure_update)
+    worker.pressure_update.connect(handle_pressure_update)
     worker.start()
 
     window.show()
