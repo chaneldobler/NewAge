@@ -1,0 +1,21 @@
+{
+  "instrument": {
+    "port": "/dev/ttySC0",
+    "address": 1,
+    "baudrate": 9600
+  },
+  "channels": [
+    {
+      "name": "Trap",
+      "id": 1
+    },
+    {
+      "name": "Oven_1",
+      "id": 2
+    },
+    {
+      "name": "Oven_2",
+      "id": 3
+    }
+  ]
+}

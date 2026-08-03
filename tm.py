@@ -1,24 +1,31 @@
 import minimalmodbus
 import time
+import json
 
 # deactivate channels on destruction?
 
 # with/without error propagation?
 
 class TMHardware:
-    len = 3 # channels 1 to 3
-    instrument = minimalmodbus.Instrument(
-    port='/dev/ttySC0',
-    slaveaddress=1, # read from rotary switch
-    ) 
-    instrument.serial.baudrate = 9600
-
     # function codes    
     read_coil_status = 1
     read_holding_registers = 3
     read_input_registers = 4
     force_single_coil = 5
     preset_single_register = 6 
+
+    def __init__(self):
+        # read config
+        with open("tm_config.json", "r") as f:
+            self.config = json.load(f)
+
+        # initialize
+        self.channels = [int(channel["id"]) for channel in self.config["channels"]]
+        self.instrument = minimalmodbus.Instrument(
+        port=self.config["instrument"]["port"],
+        slaveaddress=self.config["instrument"]["address"]
+        ) 
+        self.instrument.serial.baudrate = self.config["instrument"]["baudrate"]
 
     def get_temperature(self, channel):
         try:
@@ -28,11 +35,9 @@ class TMHardware:
             functioncode=self.read_input_registers, 
             signed=True
             ) 
-            print(f"Temperature for channel {channel}: {register_value} °C")
             return register_value
         except Exception as e:
-            print(f"An error occurred while reading the temperature: {e}")
-            raise
+            return None
 
     def set_temperature(self, channel, set_value):
         try:
@@ -43,8 +48,7 @@ class TMHardware:
             signed=True
             )
         except Exception as e:
-            print(f"An error occurred while writing the set temperature: {e}")
-            raise
+            pass
 
     def get_set_temperature(self, channel):
         try:
@@ -55,8 +59,7 @@ class TMHardware:
             )
             return register_value
         except Exception as e:
-            print(f"An error occurred while reading the set temperature: {e}")
-            raise
+            pass
 
     def get_status(self, channel): # 0:RUN, 1:STOP
         try:
@@ -64,11 +67,9 @@ class TMHardware:
                 registeraddress=2 * (channel - 1),
                 functioncode=self.read_coil_status
             )
-            print(f"Channel {channel} has status: {bit_value}")
             return bit_value
         except Exception as e:
-            print(f"An error occured while reading the status: {e}")
-            raise
+            return None
 
     def run(self, channel):
         try:
@@ -78,8 +79,7 @@ class TMHardware:
                 functioncode=self.force_single_coil
             )
         except Exception as e:
-            print(f"An error occurred while turning on: {e}")
-            raise
+            pass
 
     def stop(self, channel):
         try:
@@ -89,40 +89,19 @@ class TMHardware:
                 functioncode=self.force_single_coil
             )
         except Exception as e:
-            print(f"An error occurred while turning off: {e}")
-            raise
+            pass
 
     def read_all(self):
-        temperatures = []
-        for i in range(self.len):
-            try:
-                temperature = self.get_temperature(i+1)
-                temperatures.append(temperature)
-            except:
-                temperatures.append(None)
-                raise
-        return temperatures
+        return [self.get_temperature(i) for i in self.channels]
 
     def write_all(self, values):
-        for i in range(self.len):
-            try:
-                self.set_temperature(i+1, values[i])
-            except:
-                raise
-    
+        [self.set_temperature(i, values[i-1]) for i in self.channels]
+
     def run_all(self):
-        for i in range(self.len):
-            try:
-                self.run(i+1)
-            except: 
-                raise
+        [self.run(i) for i in self.channels]
 
     def stop_all(self):
-        for i in range(self.len):
-            try:
-                self.stop(i+1)
-            except: 
-                raise
+        [self.stop(i) for i in self.channels]
 
 if __name__ == "__main__":
     tm = TMHardware()
@@ -130,7 +109,7 @@ if __name__ == "__main__":
     tm.run_all()
     try:
         while True:
-            tm.read_all()
+            print(tm.read_all())
             time.sleep(1.0)
     except KeyboardInterrupt:
         print("Program terminated by user.")
