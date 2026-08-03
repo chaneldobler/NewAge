@@ -30,7 +30,7 @@ class UIPressure:
         """)
 
     def set_value(self, val: float):
-        self.btn.setText(f"{self.nr}\n{val:.2f} bar")
+        self.btn.setText(f"Reactor {self.nr}\n{val:.4f} bar")
 
 if __name__ == "__main__":
     keller_sensor = keller.Keller()
@@ -38,8 +38,7 @@ if __name__ == "__main__":
 
     app = QApplication(sys.argv)
     window = QWidget()
-    grid = QGridLayout(window)
-    pressure = UIPressure(window, grid, 1)
+    pressure = UIPressure(window, 1)
 
     def handle_pressure_update(val: float):
         pressure.set_value(val)

@@ -48,6 +48,7 @@ class KellerCollection:
                 pressures.append(pressure)
             except:
                 pressures.append(None)
+        return pressures
         
 if __name__ == "__main__":
     keller = Keller()

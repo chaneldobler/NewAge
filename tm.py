@@ -6,19 +6,19 @@ import time
 # with/without error propagation?
 
 class TMHardware:
+    len = 3 # channels 1 to 3
+    instrument = minimalmodbus.Instrument(
+    port='/dev/ttySC0',
+    slaveaddress=1, # read from rotary switch
+    ) 
+    instrument.serial.baudrate = 9600
+
     # function codes    
     read_coil_status = 1
     read_holding_registers = 3
     read_input_registers = 4
     force_single_coil = 5
     preset_single_register = 6 
-
-    def __init__(self):
-        self.instrument = minimalmodbus.Instrument(
-        port='/dev/ttySC0',
-        slaveaddress=1, # Read from rotary switch
-        ) 
-        self.instrument.serial.baudrate = 9600
 
     def get_temperature(self, channel):
         try:
@@ -28,7 +28,7 @@ class TMHardware:
             functioncode=self.read_input_registers, 
             signed=True
             ) 
-            print(f"Temperature: {register_value} °C")
+            print(f"Temperature for channel {channel}: {register_value} °C")
             return register_value
         except Exception as e:
             print(f"An error occurred while reading the temperature: {e}")
@@ -92,17 +92,49 @@ class TMHardware:
             print(f"An error occurred while turning off: {e}")
             raise
 
+    def read_all(self):
+        temperatures = []
+        for i in range(self.len):
+            try:
+                temperature = self.get_temperature(i+1)
+                temperatures.append(temperature)
+            except:
+                temperatures.append(None)
+                raise
+        return temperatures
+
+    def write_all(self, values):
+        for i in range(self.len):
+            try:
+                self.set_temperature(i+1, values[i])
+            except:
+                raise
+    
+    def run_all(self):
+        for i in range(self.len):
+            try:
+                self.run(i+1)
+            except: 
+                raise
+
+    def stop_all(self):
+        for i in range(self.len):
+            try:
+                self.stop(i+1)
+            except: 
+                raise
+
 if __name__ == "__main__":
     tm = TMHardware()
-    tm.run(2)
-    tm.set_temperature(2, 50)
+    tm.write_all([50, 50, 50])
+    tm.run_all()
     try:
         while True:
-            tm.get_temperature(2)
+            tm.read_all()
             time.sleep(1.0)
     except KeyboardInterrupt:
         print("Program terminated by user.")
     except Exception as e:
         print(f"Program stopped due to an error: {e}")
     finally:
-        tm.stop(2)
+        tm.stop_all()
