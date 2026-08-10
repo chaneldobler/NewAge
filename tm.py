@@ -19,8 +19,12 @@ class TMHardware:
         with open("tm_config.json", "r") as f:
             self.config = json.load(f)
 
-        # initialize
-        self.channels = [int(channel["id"]) for channel in self.config["channels"]]
+        # store IDs
+        self.trap = [int(channel["id"]) for channel in self.config["channels"]["trap"]]
+        self.ovens = [int(channel["id"]) for channel in self.config["channels"]["ovens"]]
+        self.channels = self.trap + self.ovens
+
+        # initialize bus
         self.instrument = minimalmodbus.Instrument(
         port=self.config["instrument"]["port"],
         slaveaddress=self.config["instrument"]["address"]
@@ -39,11 +43,11 @@ class TMHardware:
         except Exception as e:
             return None
 
-    def set_temperature(self, channel, set_value):
+    def set_temperature(self, channel, value):
         try:
             self.instrument.write_register(
             registeraddress=0x03E8 * (channel - 1),
-            value=set_value,
+            value=value,
             functioncode=self.preset_single_register,
             signed=True
             )
@@ -91,29 +95,32 @@ class TMHardware:
         except Exception as e:
             pass
 
-    def read_all(self):
-        return [self.get_temperature(i) for i in self.channels]
+    def get_temperature_multiple(self, idx):
+        return [self.get_temperature(i) for i in idx]
 
-    def write_all(self, values):
-        [self.set_temperature(i, values[i-1]) for i in self.channels]
+    def get_temperature_all(self):
+        return self.get_temperature_multiple(self.channels)
 
-    def run_all(self):
-        [self.run(i) for i in self.channels]
+    def set_temperature_multiple(self, idx, value):
+        [self.set_temperature(i, value) for i in idx]
 
-    def stop_all(self):
-        [self.stop(i) for i in self.channels]
+    def run_multiple(self, idx):
+        [self.run(i) for i in idx]
+
+    def stop_multiple(self, idx):
+        [self.stop(i) for i in idx]
 
 if __name__ == "__main__":
     tm = TMHardware()
-    tm.write_all([50, 50, 50])
-    tm.run_all()
+    tm.set_temperature_multiple(tm.ovens, 50)
+    tm.run_multiple(tm.ovens)
     try:
         while True:
-            print(tm.read_all())
+            print(tm.get_temperature_multiple(tm.ovens))
             time.sleep(1.0)
     except KeyboardInterrupt:
         print("Program terminated by user.")
     except Exception as e:
         print(f"Program stopped due to an error: {e}")
     finally:
-        tm.stop_all()
+        tm.stop_multiple(tm.channels)

@@ -1,0 +1,79 @@
+{
+  "devicenet": {
+    "bitrate": 125000,
+    "smc_id": 63,
+    "pi_id": 0
+  },
+  "valves": {
+    "reactors": [
+      {
+        "name": "Valve 1",
+        "id": 1
+      },
+      {
+        "name": "Valve 2",
+        "id": 2
+      },
+      {
+        "name": "Valve 3",
+        "id": 3
+      },
+      {
+        "name": "Valve 4",
+        "id": 4
+      },
+      {
+        "name": "Valve 5",
+        "id": 5
+      },
+      {
+        "name": "Valve 6",
+        "id": 6
+      },
+      {
+        "name": "Valve 7",
+        "id": 7
+      },
+      {
+        "name": "Valve 8",
+        "id": 8
+      },
+      {
+        "name": "Valve 9",
+        "id": 9
+      },
+      {
+        "name": "Valve 10",
+        "id": 10
+      }
+    ],
+    "lines": [
+      {
+        "name": "Valve Line 1",
+        "id": 11
+      },
+      {
+        "name": "Valve Line 2",
+        "id": 12
+      }
+    ],
+    "h2": [
+      {
+        "name": "Valve H2",
+        "id": 13
+      }
+    ],
+    "vacuum": [
+      {
+        "name": "Valve Vacuum",
+        "id": 14
+      }
+    ],
+    "trap": [
+      {
+        "name": "Valve Trap",
+        "id": 15
+      }
+    ]
+  }
+}

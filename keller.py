@@ -14,7 +14,7 @@ class Keller:
 
         # initialize
         self.bus = SMBus(bus=self.config["i2c"]["bus_number"])
-        self.addresses = [int(sensor["address"], 16) for sensor in self.config["sensors"]]
+        self.addresses = [int(reactor["address"], 16) for reactor in self.config["reactors"]]
 
     def get_pressure(self, addr=0x40):
         try:
@@ -37,14 +37,14 @@ class Keller:
         except Exception as e:
             return None
 
-    def read_all(self):
+    def get_pressure_all(self):
         return [self.get_pressure(addr) for addr in self.addresses]
         
 if __name__ == "__main__":
     keller = Keller()
     try:
         while True:
-            print(keller.read_all())
+            print(keller.get_pressure_all())
             time.sleep(1.0)
     except KeyboardInterrupt:
         print("Program terminated by user.")

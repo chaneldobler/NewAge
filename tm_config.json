@@ -4,18 +4,22 @@
     "address": 1,
     "baudrate": 9600
   },
-  "channels": [
-    {
+  "channels": {
+    "trap": [
+      {
       "name": "Trap",
       "id": 1
-    },
-    {
-      "name": "Oven_1",
-      "id": 2
-    },
-    {
-      "name": "Oven_2",
-      "id": 3
-    }
-  ]
+      }
+    ],
+    "ovens": [
+      {
+        "name": "Oven 1",
+        "id": 2
+      },
+      {
+        "name": "Oven 2",
+        "id": 3
+      }
+    ]
+  }
 }

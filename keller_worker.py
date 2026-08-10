@@ -1,22 +1,20 @@
 import time
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread
+
+# All communication to the keller device goes through the keller worker
 
 class KellerWorker(QThread):
-    # sends (pressure_val) back to the GUI
-    pressure_update = Signal(float)
-
-    def __init__(self, keller, interval_sec=1):
+    def __init__(self, keller):
         super().__init__()
         self.keller = keller
-        self.interval_sec = interval_sec
         self.running = True
+        self.cache = None # Store latest values
 
     def run(self):
-        """Runs in a background thread."""
         while self.running:
-            val = self.keller.get_pressure()
-            self.pressure_update.emit(val)
-            time.sleep(self.interval_sec)
+            # Update cache
+            self.cache = self.keller.get_pressure_all()
+            time.sleep(1)
 
     def stop(self):
         self.running = False

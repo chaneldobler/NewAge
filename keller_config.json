@@ -2,45 +2,45 @@
   "i2c": {
     "bus_number": 1
   },
-  "sensors": [
+  "reactors": [
     {
-      "name": "Sensor_01",
+      "name": "Reactor 1",
       "address": "0x40"
     },
     {
-      "name": "Sensor_02",
+      "name": "Reactor 2",
       "address": "0x41"
     },
     {
-      "name": "Sensor_03",
+      "name": "Reactor 3",
       "address": "0x42"
     },
     {
-      "name": "Sensor_04",
+      "name": "Reactor 4",
       "address": "0x43"
     },
     {
-      "name": "Sensor_05",
+      "name": "Reactor 5",
       "address": "0x44"
     },
     {
-      "name": "Sensor_06",
+      "name": "Reactor 6",
       "address": "0x45"
     },
     {
-      "name": "Sensor_07",
+      "name": "Reactor 7",
       "address": "0x46"
     },
     {
-      "name": "Sensor_08",
+      "name": "Reactor 8",
       "address": "0x47"
     },    
     {
-      "name": "Sensor_09",
+      "name": "Reactor 9",
       "address": "0x48"
     },
     {
-      "name": "Sensor_10",
+      "name": "Reactor 10",
       "address": "0x49"
     }
   ]

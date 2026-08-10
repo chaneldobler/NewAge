@@ -239,7 +239,6 @@ if __name__ == "__main__":
 
     window = MainWindow(smcdevnet)
 
-    # Wire up signals to main window methods
     keller_worker.pressure_update.connect(window.handle_pressure_update)
     keller_worker.start()
 

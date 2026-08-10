@@ -1,22 +1,28 @@
+import queue
 import time
 from PySide6.QtCore import QThread, Signal
 
 class TMWorker(QThread):
-    # sends (temperature_values) back to the GUI
-    temperature_update = Signal(list)
-
-    def __init__(self, tm, interval_sec=1):
+    def __init__(self, tm):
         super().__init__()
         self.tm = tm
-        self.interval_sec = interval_sec
+        self.cache = None # Store latest values
+        self.requests = queue.Queue() # Thread-safe FIFO queue
         self.running = True
 
     def run(self):
-        """Runs in a background thread."""
         while self.running:
-            values = self.tm.read_all()
-            self.temperature_update.emit(values)
-            time.sleep(self.interval_sec)
+            # Process any pending requests 
+            while not self.requests.empty():
+                cmd_func, args = self.requests.get()
+                cmd_func(*args)
+            # Update cache
+            self.cache = self.tm.get_temperature_all()
+
+            time.sleep(1)
+
+    def send_request(self, func, *args):
+        self.requests.put((func, args))
 
     def stop(self):
         self.running = False
