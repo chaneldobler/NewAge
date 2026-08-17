@@ -31,10 +31,10 @@ class TMHardware:
         ) 
         self.instrument.serial.baudrate = self.config["instrument"]["baudrate"]
 
-    def get_temperature(self, channel):
+    def get_temperature(self, id):
         try:
             register_value = self.instrument.read_register(
-            registeraddress=0x03E8 + 6 * (channel - 1),
+            registeraddress=0x03E8 + 6 * (id - 1),
             number_of_decimals=0, 
             functioncode=self.read_input_registers, 
             signed=True
@@ -43,10 +43,10 @@ class TMHardware:
         except Exception as e:
             return None
 
-    def set_temperature(self, channel, value):
+    def set_temperature(self, id, value):
         try:
             self.instrument.write_register(
-            registeraddress=0x03E8 * (channel - 1),
+            registeraddress=0x03E8 * (id - 1),
             value=value,
             functioncode=self.preset_single_register,
             signed=True
@@ -54,10 +54,10 @@ class TMHardware:
         except Exception as e:
             pass
 
-    def get_set_temperature(self, channel):
+    def get_set_temperature(self, id):
         try:
             register_value = self.instrument.read_register(
-            registeraddress=0x03E8 * (channel - 1),
+            registeraddress=0x03E8 * (id - 1),
             functioncode=self.read_holding_registers,
             signed=True
             )
@@ -65,30 +65,30 @@ class TMHardware:
         except Exception as e:
             pass
 
-    def get_status(self, channel): # 0:RUN, 1:STOP
+    def get_status(self, id): # 0:RUN, 1:STOP
         try:
             bit_value = self.instrument.read_bit(
-                registeraddress=2 * (channel - 1),
+                registeraddress=2 * (id - 1),
                 functioncode=self.read_coil_status
             )
             return bit_value
         except Exception as e:
             return None
 
-    def run(self, channel):
+    def run(self, id):
         try:
             self.instrument.write_bit(
-                registeraddress=2 * (channel - 1), 
+                registeraddress=2 * (id - 1), 
                 value=0, # RUN
                 functioncode=self.force_single_coil
             )
         except Exception as e:
             pass
 
-    def stop(self, channel):
+    def stop(self, id):
         try:
             self.instrument.write_bit(
-                registeraddress=2 * (channel - 1),
+                registeraddress=2 * (id - 1),
                 value=1, # STOP
                 functioncode=self.force_single_coil
             )

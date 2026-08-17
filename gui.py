@@ -1,13 +1,15 @@
 import sys
-from PySide6 import QtWidgets
+import os
+import json
+from PySide6 import QtWidgets,QtCore
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame
 from PySide6.QtCore import QSize, QPoint
 from PySide6.QtGui import QColor, QPainter, QPen
 import pyqtgraph as pg
 
 # Hardware & Worker Imports
-import keller_worker, keller, smc, tm_worker, tm
-from smc_worker import SMCWorker 
+import keller, smc, tm
+import worker
 
 
 # =============================================================================
@@ -287,28 +289,145 @@ class ControlTab(QtWidgets.QWidget):
             if i < len(self.schematic.temperatures):
                 self.schematic.temperatures[i].set_value(val)
 
-
 # =============================================================================
-# 4. TAB 2: PARAMETERS / SETTINGS VIEW
+# 4. TAB 2: PARAMETERS / SETTINGS VIEW (JSON CONFIG EDITOR)
 # =============================================================================
-class ParametersTab(QtWidgets.QWidget):
-    def __init__(self, parent=None):
+class JSONConfigFileTab(QtWidgets.QWidget):
+    """Generates an interactive form UI for a given JSON configuration file."""
+    def __init__(self, filepath: str, parent=None):
         super().__init__(parent)
-        layout = QtWidgets.QFormLayout(self)
+        self.filepath = filepath
+        self.config_data = {}
+        self.widgets_map = {}  # Maps key paths to (widget, original_type)
 
-        self.pressure_limit_spin = QtWidgets.QDoubleSpinBox()
-        self.pressure_limit_spin.setRange(0.0, 10.0)
-        self.pressure_limit_spin.setValue(2.0)
+        layout = QtWidgets.QVBoxLayout(self)
 
-        self.temp_alarm_spin = QtWidgets.QDoubleSpinBox()
-        self.temp_alarm_spin.setRange(-50.0, 150.0)
-        self.temp_alarm_spin.setValue(80.0)
+        # Scrollable area for dynamically sized forms
+        self.scroll_area = QtWidgets.QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.container = QtWidgets.QWidget()
+        self.container_layout = QtWidgets.QVBoxLayout(self.container)
 
-        self.save_btn = QtWidgets.QPushButton("Apply Settings")
+        self.scroll_area.setWidget(self.container)
+        layout.addWidget(self.scroll_area)
 
-        layout.addRow("Max Pressure Limit (bar):", self.pressure_limit_spin)
-        layout.addRow("Temp Alarm Threshold (°C):", self.temp_alarm_spin)
-        layout.addRow(self.save_btn)
+        # Save Button
+        self.save_btn = QtWidgets.QPushButton(f"Save '{os.path.basename(filepath)}'")
+        self.save_btn.setStyleSheet("font-weight: bold; padding: 6px;")
+        self.save_btn.clicked.connect(self.save_config)
+        layout.addWidget(self.save_btn)
+
+        self.load_config()
+
+    def load_config(self):
+        """Loads JSON file data and constructs form inputs."""
+        if not os.path.exists(self.filepath):
+            lbl = QtWidgets.QLabel(f"Configuration file not found: {self.filepath}")
+            self.container_layout.addWidget(lbl)
+            return
+
+        try:
+            with open(self.filepath, "r", encoding="utf-8") as f:
+                self.config_data = json.load(f)
+            self._build_ui(self.config_data, self.container_layout)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error Loading File", f"Could not read {self.filepath}:\n{e}")
+
+    def _build_ui(self, data, parent_layout, path=()):
+        """Recursively parses dicts and lists to construct input controls."""
+        if isinstance(data, dict):
+            form = QtWidgets.QFormLayout()
+            for key, val in data.items():
+                current_path = path + (key,)
+                if isinstance(val, (dict, list)):
+                    group = QtWidgets.QGroupBox(str(key).replace("_", " ").title())
+                    group_layout = QtWidgets.QVBoxLayout(group)
+                    self._build_ui(val, group_layout, current_path)
+                    parent_layout.addWidget(group)
+                else:
+                    widget = self._create_widget_for_val(val, current_path)
+                    form.addRow(str(key).replace("_", " ").title() + ":", widget)
+            if form.rowCount() > 0:
+                parent_layout.addLayout(form)
+
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                current_path = path + (i,)
+                group = QtWidgets.QGroupBox(f"Item {i + 1}")
+                group_layout = QtWidgets.QVBoxLayout(group)
+                self._build_ui(item, group_layout, current_path)
+                parent_layout.addWidget(group)
+
+    def _create_widget_for_val(self, val, path):
+        """Creates standard inputs according to JSON data types."""
+        if isinstance(val, bool):
+            widget = QtWidgets.QCheckBox()
+            widget.setChecked(val)
+        elif isinstance(val, int):
+            widget = QtWidgets.QSpinBox()
+            widget.setRange(-2147483648, 2147483647)
+            widget.setValue(val)
+        elif isinstance(val, float):
+            widget = QtWidgets.QDoubleSpinBox()
+            widget.setRange(-1000000.0, 1000000.0)
+            widget.setDecimals(4)
+            widget.setValue(val)
+        else:
+            widget = QtWidgets.QLineEdit(str(val))
+
+        self.widgets_map[path] = (widget, type(val))
+        return widget
+
+    def save_config(self):
+        """Reads input values from UI widgets and overwrites the JSON file."""
+        for path, (widget, val_type) in self.widgets_map.items():
+            if val_type == bool:
+                val = widget.isChecked()
+            elif val_type == int:
+                val = widget.value()
+            elif val_type == float:
+                val = widget.value()
+            else:
+                val = widget.text()
+
+            # Traverse data structure to update target key/index
+            target = self.config_data
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = val
+
+        try:
+            with open(self.filepath, "w", encoding="utf-8") as f:
+                json.dump(self.config_data, f, indent=2)
+            QtWidgets.QMessageBox.information(
+                self, "Success", f"Successfully saved modifications to:\n{os.path.basename(self.filepath)}"
+            )
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Error Saving File", f"Failed to save {self.filepath}:\n{e}")
+
+
+class ParametersTab(QtWidgets.QWidget):
+    """Tab container hosting dynamic settings tabs for each JSON file."""
+    def __init__(self, config_files=None, parent=None):
+        super().__init__(parent)
+        layout = QtWidgets.QVBoxLayout(self)
+
+        self.sub_tabs = QtWidgets.QTabWidget()
+        layout.addWidget(self.sub_tabs)
+
+        # Default paths to your configuration files
+        if config_files is None:
+            config_files = [
+                "conditioning_config.json",
+                "keller_config.json",
+                "smc_config.json",
+                "tm_config.json"
+            ]
+
+        for filepath in config_files:
+            tab_title = os.path.basename(filepath).replace(".json", "").replace("_", " ").title()
+            editor_tab = JSONConfigFileTab(filepath, self)
+            self.sub_tabs.addTab(editor_tab, tab_title)
 
 
 # =============================================================================
@@ -333,18 +452,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.control_tab, "Control & Schematic")
         self.tabs.addTab(self.parameters_tab, "Parameters & Configuration")
 
-    def handle_pressure_update(self, val: float):
-        self.pressure_data.append(val)
-        self.control_tab.update_pressure(val, list(self.pressure_data))
+    def handle_pressure_update(self, val: list):
+        self.pressure_data.append(val[0])
+        self.control_tab.update_pressure(val[0], list(self.pressure_data))
 
     def handle_temperature_update(self, vals: list):
         self.control_tab.update_temperatures(vals)
 
-    def handle_valve_status_update(self, valve_nr: int, status: int):
-        # Look up the specific UIValve instance and set its status
+    def handle_valve_status_update(self, valves: list):
         schematic = self.control_tab.schematic
-        if valve_nr in schematic.valves:
-            schematic.valves[valve_nr].set_status(status)
+        active_set = set(valves)
+
+        for valve_nr, valve in schematic.valves.items():
+            status = 1 if valve_nr in active_set else 0
+            valve.set_status(status)    
 
 
 # =============================================================================
@@ -356,24 +477,23 @@ if __name__ == "__main__":
     # 1. Initialize SMC Hardware & Worker
     smcdevnet = smc.SmcDevNet()
     smcdevnet.start()
-    # Provide the worker with the list of valve numbers to monitor (1 to 15)
-    monitored_valves = list(range(1, 16))
-    smc_worker_thread = SMCWorker(smcdevnet, monitored_valves)
+
+    smc_worker_thread = worker.Worker(smcdevnet,"get_status_all")
 
     # 2. Initialize Other Hardware & Workers
     keller_sensor = keller.Keller()
-    keller_worker_thread = keller_worker.KellerWorker(keller_sensor)
+    keller_worker_thread = worker.Worker(keller_sensor, "get_pressure_all")
 
     tm_sensor = tm.TMHardware()
-    tm_worker_thread = tm_worker.TMWorker(tm_sensor)
+    tm_worker_thread = worker.Worker(tm_sensor, "get_temperature_all")
 
     # 3. Main GUI App initialization
     window = MainWindow(smc_worker_thread)
 
     # 4. Connect Asynchronous Worker Threads to the GUI
-    keller_worker_thread.pressure_update.connect(window.handle_pressure_update)
-    tm_worker_thread.temperature_update.connect(window.handle_temperature_update)
-    smc_worker_thread.status_update.connect(window.handle_valve_status_update)
+    keller_worker_thread.data_update.connect(window.handle_pressure_update)
+    tm_worker_thread.data_update.connect(window.handle_temperature_update)
+    smc_worker_thread.data_update.connect(window.handle_valve_status_update)
 
     # 5. Start Workers
     keller_worker_thread.start() 
