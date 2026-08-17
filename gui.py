@@ -24,11 +24,12 @@ class UIPressure:
         self.btn.setFixedSize(QSize(80, 60))
         self.btn.setEnabled(False)
 
-        hue = 0.5 + 0.5 * (nr - 1) / 10
-        bg_color = QColor.fromHslF(hue, 0.75, 0.45).name()
+        hue = ((nr - 1) / 10) % 1.0
+        self.color = QColor.fromHslF(hue, 0.75, 0.45)
+        
         self.btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {bg_color};
+                background-color: {self.color.name()};
                 color: white;
                 border: 2px solid #444444;
                 border-radius: 10px;
@@ -40,7 +41,10 @@ class UIPressure:
         """)
 
     def set_value(self, val: float):
-        self.btn.setText(f"Reactor {self.nr}\n{val:.4f} bar")
+        if val is None:
+            self.btn.setText(f"Reactor {self.nr}\n-- bar")
+        else:
+            self.btn.setText(f"Reactor {self.nr}\n{val:.4f} bar")
 
 
 class UITemperature:
@@ -66,7 +70,10 @@ class UITemperature:
         """)
 
     def set_value(self, val: float):
-        self.btn.setText(f"Oven {self.nr}\n{val:.2f} °C")
+        if val is None:
+            self.btn.setText(f"Oven {self.nr}\n-- °C")
+        else:
+            self.btn.setText(f"Oven {self.nr}\n{val:.2f} °C")
 
 
 class UIValve:
@@ -276,13 +283,30 @@ class ControlTab(QtWidgets.QWidget):
         self.plot_widget.showGrid(x=True, y=True)
         self.plot_widget.setBackground('w')
         self.plot_widget.setYRange(0, 2)
-        self.curve = self.plot_widget.plot(pen=pg.mkPen(color='c', width=2))
+        
+        # 1. Enable Legend
+        self.plot_widget.addLegend()
+
+        # 2. Create plot curve per pressure button with matching color
+        self.curves = []
+        for p in self.schematic.pressures:
+            pen = pg.mkPen(color=p.color, width=2)
+            curve = self.plot_widget.plot(pen=pen, name=f"P{p.nr}")
+            self.curves.append(curve)
+
         layout.addWidget(self.plot_widget)
 
-    def update_pressure(self, value, data_history):
-        if self.schematic.pressures:
-            self.schematic.pressures[0].set_value(value)
-        self.curve.setData(data_history)
+    def update_pressure(self, values: list, data_history: list):
+        # Update pressure UI button values
+        for i, val in enumerate(values):
+            if i < len(self.schematic.pressures):
+                self.schematic.pressures[i].set_value(val)
+
+        # Update curve data for each sensor
+        for i, curve in enumerate(self.curves):
+            if i < len(data_history):
+                formatted_history = [float('nan') if v is None else v for v in data_history[i]]
+                curve.setData(formatted_history)
 
     def update_temperatures(self, values):
         for i, val in enumerate(values):
@@ -439,22 +463,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("Valve & Pressure Controller")
         self.resize(1420, 720)
 
-        self.pressure_data = []
-        self.smc_worker = smc_worker # Save reference to the worker
+        # Store separate history arrays for each pressure sensor (10 total)
+        self.pressure_history = [[] for _ in range(10)]
+        self.smc_worker = smc_worker
 
         self.tabs = QtWidgets.QTabWidget()
         self.setCentralWidget(self.tabs)
 
-        # Pass the worker's send_request method down into the UI logic
         self.control_tab = ControlTab(valve_request_cb=self.smc_worker.send_request)
         self.parameters_tab = ParametersTab()
 
         self.tabs.addTab(self.control_tab, "Control & Schematic")
         self.tabs.addTab(self.parameters_tab, "Parameters & Configuration")
 
-    def handle_pressure_update(self, val: list):
-        self.pressure_data.append(val[0])
-        self.control_tab.update_pressure(val[0], list(self.pressure_data))
+    def handle_pressure_update(self, vals: list):
+        # Record incoming readings into per-sensor history
+        for i, val in enumerate(vals):
+            if i < len(self.pressure_history):
+                self.pressure_history[i].append(val)
+                
+        self.control_tab.update_pressure(vals, self.pressure_history)
 
     def handle_temperature_update(self, vals: list):
         self.control_tab.update_temperatures(vals)
@@ -465,7 +493,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         for valve_nr, valve in schematic.valves.items():
             status = 1 if valve_nr in active_set else 0
-            valve.set_status(status)    
+            valve.set_status(status)
 
 
 # =============================================================================

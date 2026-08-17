@@ -71,6 +71,7 @@ class Conditioning:
         return np.mean(pressures, axis=0)
 
     def leak_test(self):
+        # read config
         with open("conditioning_config.json", "r") as f:
             config = json.load(f)
         cfg = config["leak_test"]
@@ -101,10 +102,46 @@ class Conditioning:
         if not all(p < difference_limit for p in pressure_diff):
             print("Leak test failed.") # prompt user for retry ...
 
+    def h2_clean(self):
+        # read config
+        with open("conditioning_config.json", "r") as f:
+            config = json.load(f)
+        cfg = config["h2_clean"]
+        num_cycles = cfg["number_of_cycles"]
+        threshold_pressure = cfg["threshold_pressure"]
+        clean_duration = cfg["clean_duration"]
+        
+        for _ in range(num_cycles):
+            # set valves
+            self.smc_worker.send_request("close_multiple", self.smc.vacuum)
+            self.smc_worker.send_request("open_multiple", self.smc.h2)
+
+            # wait for reactors to reach pressure
+            pressures = self.smc_worker.cache
+            while not any(p > threshold_pressure for p in pressures):
+                time.sleep(1.0)
+                pressures = self.smc_worker.cache
+
+            # set valves
+            self.smc_worker.send_request("close_multiple", self.smc.h2)
+            time.sleep(clean_duration)
+            self.smc_worker.send_request("close_multiple", self.smc.vacuum)
+            time.sleep(60)
+
+    def offset_correction(self):
+        self.smc_worker.send_request(
+            "open_multiple",
+            self.smc.reactors 
+            + self.smc.lines
+            + self.vac
+            )
+
+        time.sleep(20)
+
+        return self.get_average_pressure()
+
+    def clean_alf(self):
+        self.tm_worker.send_request("set_temperature_multiple", self.tm.trap, 450)
 
         
 
-
-
-
-    
