@@ -7,7 +7,7 @@ import numpy as np
 
 # conditioning thread
 
-class Conditioning:
+class Procedures:
     def __init__(self, keller_worker, tm_worker, smc_worker):
         # workers handle communication to hardware
         self.keller_worker = keller_worker
@@ -18,6 +18,10 @@ class Conditioning:
         self.keller = self.keller_worker.device
         self.tm = self.tm_worker.device
         self.smc = self.smc_worker.device
+
+        # store active idx
+        self.active = None
+        self.config = None
 
     def oxidise_iron(self):
         # read config
@@ -30,7 +34,7 @@ class Conditioning:
 
         # check pressures
         pressures = self.keller_worker.cache
-        if not all(p > threshold_pressure for p in pressures):
+        if any(p is not None and p < threshold_pressure for p in pressures):
             print("Error: Pressure is below threshold. Oxidation process stopped.")
             return False
 
@@ -54,9 +58,13 @@ class Conditioning:
 
         # wait for ovens to reach temperature
         temperatures = self.tm_worker.cache
+        start_time = time.time()
         while not all(t > conditioning_oven_temperature for t in temperatures):
             time.sleep(1.0)
             temperatures = self.tm_worker.cache
+            # timeout
+            if time.time() - start_time > 10:
+                return
 
         # make device go up
 
@@ -98,7 +106,7 @@ class Conditioning:
         pressure_before = self.get_average_pressure()
         time.sleep(test_duration)
         pressure_after = self.get_average_pressure()  
-        pressure_diff = np.subtract(pressure_after, pressure_before).tolist()
+        pressure_diff = np.subtract(pressure_after, pressure_before).tolist() # fix for nones
         if not all(p < difference_limit for p in pressure_diff):
             print("Leak test failed.") # prompt user for retry ...
 
@@ -133,15 +141,162 @@ class Conditioning:
             "open_multiple",
             self.smc.reactors 
             + self.smc.lines
-            + self.vac
+            + self.smc.vac
             )
 
         time.sleep(20)
 
-        return self.get_average_pressure()
+        return self.get_average_pressure() # what do i do with this? 
+
+    def clean_trap(self):
+        pass
 
     def clean_alf(self):
-        self.tm_worker.send_request("set_temperature_multiple", self.tm.trap, 450)
+        pass
+
+    def conditioning(self, idx):
+        self.active = idx
+
+        with open("conditioning_config.json", "r") as f:
+            self.config = json.load(f)
+
+        self.oxidise_iron()
+        # evacuate reactors ? 
+        self.leak_test()
+        self.h2_clean()
+
+    def load_trap(self):
+        pass
+
+    def load_reactors(self):
+        # for reactor in active reactors
+
+        # set valves
+        self.smc_worker.send_request(
+            "open_multiple",
+            + self.smc.vacuum
+            + self.smc.trap
+        )
+        self.smc_worker.send_request(
+            "close_multiple",
+            self.smc.lines
+        )
+
+        time.sleep(5)
+
+        # open reactor and line
+
+        time.sleep(10)
+
+        self.smc_worker.send_request("close_multiple", self.smc.vacuum)
+        self.tm_worker.send_request("set_temperature_multiple", self.tm.trap, 420)
+        self.tm_worker.send_request("run_multiple", self.tm.trap)
+
+        time.sleep(10)
+
+        # close reactor and log pressure
+
+        time.sleep(0.2)
+
+        self.smc_worker.send_request("open_multiple", self.smc.vacuum)
+
+        start_time = time.time()
+        while True: # something
+            if start_time - time.time() > 10:
+                break
+            
+            self.smc_worker.send_request("close_multiple", self.smc.vacuum)
+            time.sleep(0.2)
+            # open reactor
+            time.sleep(1)
+            # close reactor
+            time.sleep(0.2)
+            self.smc_worker.send_request("open_multiple", self.smc.vacuum)
+            time.sleep(1)
+
+        # log pressure
+
+        self.smc_worker.send_request("close_multiple", self.smc.vacuum)
+
+        time.sleep(0.2)
+
+        self.smc_worker.send_request(
+            "open_multiple",
+            self.smc.h2 # + reactor
+        )
+
+        # wait for pressure in reactor
+
+        # close reactor
+
+        while True: # something
+            if start_time - time.time() > 10:
+                break
+
+            self.smc_worker.send_request("close_multiple", self.smc.h2)
+            time.sleep(0.2)
+            # open reactor
+            time.sleep(1)
+            # close valve
+            time.sleep(0.2)
+            self.smc_worker.send_request("open_multiple", self.smc.h2)
+            time.sleep(1)
+
+        # log pressure
+
+        self.smc_worker.send_request("close_multiple", self.smc.h2)
+        self.smc_worker.send_request(
+            "open_multiple", 
+            self.smc.lines
+            + self.smc.vacuum
+        )
+        time.sleep(5)
+
+    def reaction(self):
+        self.tm_worker.send_request("set_temperature_multiple", self.tm.ovens, 580)
+
+        # peltier coolers
+
+        # wait for ovens to reach temperature
+        temperatures = self.tm_worker.cache
+        start_time = time.time()
+        while not all(t > 560 for t in temperatures):
+            time.sleep(1.0)
+            temperatures = self.tm_worker.cache
+            # timeout
+            if time.time() - start_time > 10:
+                self.tm_worker.send_request("stop_multiple", self.tm.ovens)
+                self.smc_worker.send_request("close_all")
+                return
+
+        # oven up
+
+        time.sleep(2)
+
+        pressures = self.keller_worker.cache
+        if any(p is not None and p > 0.18 for p in pressures):
+            # user input if continue or not
+            pass
+
+    def remove_water(self):
+        self.smc_worker.send_request(
+            "open_multiple",
+            self.smc.lines
+            + self.smc.reactors
+            + self.smc.vacuum
+        )
+
+        # off peltiers
+
+        time.sleep(420)
+
+        self.smc_worker.send_request(
+            "close_multiple",
+            self.smc.lines
+            + self.smc.reactors
+            + self.smc.vacuum
+        )
+
 
         
 

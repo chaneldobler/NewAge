@@ -140,8 +140,14 @@ class SmcDevNet:
         # Group, Destination, Transmit message across explicit connection
         cid = self.gr_2_id | self.smc_id | 4
 
+        # Retrieve current status, Set target bits
+        current = int.from_bytes(bytes(self.get_status_all), byteorder='little')
+        additional = int.from_bytes(bytes(self.to_mask(idx)), byteorder='little')
+        mask = current | additional
+        payload = list(mask.to_bytes(3, byteorder='little'))
+
         # [Source MAC ID, Set_Attribute_Single, Class, Instance, Attribute, 3 Value Bytes]
-        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + self.to_mask(idx)
+        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + payload
 
         self.send_message(cid, data)
 
@@ -167,8 +173,14 @@ class SmcDevNet:
         # Group, Destination, Transmit message across explicit connection
         cid = self.gr_2_id | self.smc_id | 4
 
+        # Retrieve current status, Clear target bits
+        current = int.from_bytes(bytes(self.get_status_all), byteorder='little')
+        additional = int.from_bytes(bytes(self.to_mask(idx)), byteorder='little')
+        mask = current & ~additional
+        payload = list(mask.to_bytes(3, byteorder='little'))
+
         # [Source MAC ID, Set_Attribute_Single, Class, Instance, Attribute, 3 Value Bytes]
-        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + self.to_mask(idx)
+        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + payload
 
         self.send_message(cid, data)
 

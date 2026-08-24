@@ -5,13 +5,14 @@ from PySide6.QtCore import QThread, Signal
 class Worker(QThread):
     data_update = Signal(list)
     
-    def __init__(self, device, poll_method_name=None):
+    def __init__(self, device, poll_method_name=None, interval=0.2):
         super().__init__()
         self.device = device
         self.poll_method_name = poll_method_name
         self.cache = None 
         self.requests = queue.Queue() # Thread-safe FIFO queue
         self.running = True
+        self.interval = interval
 
     def run(self):
         while self.running:
@@ -28,7 +29,7 @@ class Worker(QThread):
                 self.cache = poll_method()
                 self.data_update.emit(self.cache)
 
-            time.sleep(1)
+            time.sleep(self.interval)
 
     def send_request(self, func, *args):
         self.requests.put((func, args))
