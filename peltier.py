@@ -6,4 +6,5 @@ GPIO.setup(15, GPIO.OUT)     # Set pin 17 as output
 GPIO.setup(11, GPIO.OUT)     # Set pin 17 as output
 GPIO.output(15, GPIO.LOW)    # Set LOW (0V)
 GPIO.output(11, GPIO.LOW)     # Set pin 17 as output
+time.sleep(30)
 GPIO.cleanup()               # Reset GPIO states on script completion

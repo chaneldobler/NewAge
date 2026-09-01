@@ -16,13 +16,13 @@ class Keller:
         self.bus = SMBus(bus=self.config["i2c"]["bus_number"])
         self.addresses = [int(reactor["address"], 16) for reactor in self.config["reactors"]]
 
-    def get_pressure(self, id):
+    def get_pressure(self, addr):
         try:
-            self.bus.write_byte(i2c_addr=id, value=self.request_measurement)
+            self.bus.write_byte(i2c_addr=addr, value=self.request_measurement)
 
             time.sleep(0.01) # Wait >= 8ms
 
-            msg = i2c_msg.read(address=id, length=3)
+            msg = i2c_msg.read(address=addr, length=3)
             self.bus.i2c_rdwr(msg)
             status, p_msb, p_lsb = msg
 

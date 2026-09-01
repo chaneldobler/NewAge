@@ -3,7 +3,7 @@ import time
 from PySide6.QtCore import QThread, Signal
 
 class Worker(QThread):
-    data_update = Signal(list)
+    update = Signal(list)
     
     def __init__(self, device, poll_method_name=None, interval=0.2):
         super().__init__()
@@ -27,11 +27,11 @@ class Worker(QThread):
             if self.poll_method_name and hasattr(self.device, self.poll_method_name):
                 poll_method = getattr(self.device, self.poll_method_name)
                 self.cache = poll_method()
-                self.data_update.emit(self.cache)
+                self.update.emit(self.cache)
 
             time.sleep(self.interval)
 
-    def send_request(self, func, *args):
+    def request(self, func, *args):
         self.requests.put((func, args))
 
     def stop(self):

@@ -5,7 +5,7 @@ import numpy as np
 
 # the expected units are the standard units: bar, s, celsius
 
-# conditioning thread
+# send requesst to just request
 
 class Procedures:
     def __init__(self, keller_worker, tm_worker, smc_worker):

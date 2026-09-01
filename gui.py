@@ -2,9 +2,9 @@ import sys
 import os
 import json
 from PySide6 import QtWidgets,QtCore
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame
-from PySide6.QtCore import QSize, QPoint
-from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel
+from PySide6.QtCore import QSize, QPoint, QPointF, Qt
+from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QPolygonF, QBrush
 import pyqtgraph as pg
 
 # Hardware & Worker Imports
@@ -13,284 +13,352 @@ import worker
 import procedures
 
 
+# sizes as parameters to pass in arguments
+# lengths as well
+
 # =============================================================================
 # 1. UI COMPONENTS
 # =============================================================================
 class UIPressure(QWidget):
-    def __init__(self, parent, nr, toggle_cb=None):
+    def __init__(self, parent, id):
         super().__init__(parent)
         self.parent = parent
-        self.nr = nr # id
-        self.is_on = True # holds status
-        self.toggle_cb = toggle_cb # connects pressure display to toggle button
+        self.id = id
+        self.active = True 
 
-        # coloring from range
-        hue = ((nr - 1) / 10) % 1.0
+        # Reactor Color
+        hue = (self.id - 1) / 10.0
         self.color = QColor.fromHslF(hue, 0.75, 0.45)
 
-        # layout
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(2)
+        # Outer Layout
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
 
-        # display
-        self.display = QtWidgets.QLabel(f"Reactor {nr}\n-- bar")
-        self.display.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
-        self.display.setFixedSize(86, 56)
+        # Main Frame 
+        self.main_frame = QFrame()
+        outer_layout.addWidget(self.main_frame)
 
-        # toggle button 
-        self.toggle_btn = QPushButton("ON")
-        self.toggle_btn.setFixedSize(86, 22)
+        frame_layout = QVBoxLayout(self.main_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
+
+        # Header 
+        self.header_display = QLabel(f"Reactor {self.id}")
+        self.header_display.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.header_display.setFixedHeight(30) 
+
+        # Body Container 
+        self.body_widget = QWidget()
+        self.body_widget.setObjectName("bodyWidget") 
+        
+        body_layout = QVBoxLayout(self.body_widget)
+        body_layout.setContentsMargins(6, 6, 6, 6) 
+        body_layout.setSpacing(6)
+
+        # Value Display
+        self.value_label = QLabel("-- mbar")
+        self.value_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        # Toggle Button 
+        self.toggle_btn = QPushButton("Deactivate")
+        self.toggle_btn.setFixedHeight(20)
         self.toggle_btn.clicked.connect(self.toggle)
 
-        # add to layout
-        layout.addWidget(self.display)
-        layout.addWidget(self.toggle_btn)
-        self.setFixedSize(86, 80)
+        # Layout Assembly
+        body_layout.addWidget(self.value_label)
+        body_layout.addWidget(self.toggle_btn)
 
+        frame_layout.addWidget(self.header_display)
+        frame_layout.addWidget(self.body_widget)
+
+        self.setFixedSize(120, 100)
         self._apply_style()
 
     def toggle(self):
-        self.is_on = not self.is_on
+        self.active = not self.active
         self._apply_style()
-        if self.toggle_cb:
-            self.toggle_cb(self.nr, self.is_on)
-
-    def _apply_style(self):
-        display_bg = self.color.name() if self.is_on else "#555555"
-        
-        btn_bg = "#ffffff" if self.is_on else "#666666"
-        btn_fg = "#000000" if self.is_on else "#ffffff"
-        btn_pressed = "#e0e0e0" if self.is_on else "#444444"
-        btn_text = "ON" if self.is_on else "OFF"
-
-        self.display.setStyleSheet(f"""
-            QLabel {{
-                background-color: {display_bg};
-                color: white;
-                border: 2px solid #444444;
-                border-radius: 6px;
-                font-weight: bold;
-                font-size: 13px;
-            }}
-        """)
-        
-        self.toggle_btn.setText(btn_text)
-        self.toggle_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {btn_bg};
-                color: {btn_fg};
-                border: 1px solid #444444;
-                border-radius: 4px;
-                font-weight: bold;
-                font-size: 11px;
-            }}
-            QPushButton:pressed {{
-                background-color: {btn_pressed};
-            }}
-        """)
 
     def set_value(self, val: float):
-        if not self.is_on:
-            self.display.setText(f"Reactor {self.nr}\nOFF")
+        if not self.active:
+            self.value_label.setText("")
         elif val is None:
-            self.display.setText(f"Reactor {self.nr}\n-- bar")
+            self.value_label.setText("-- mbar")
         else:
-            self.display.setText(f"Reactor {self.nr}\n{val:.4f} bar")
+            self.value_label.setText(f"{int(val*1000)} mbar")
 
-class UITemperature:
-    def __init__(self, parent, nr, label=None):
-        self.parent = parent
-        self.nr = nr # id
-        self.label = label
+    def _apply_style(self):
+        header_bg = self.color.name() if self.active else "#555555"
+        btn_text = "Deactivate" if self.active else "Activate"
 
-        self.btn = QPushButton(f"{self.label}\n-- °C", parent)
-        self.btn.setFixedSize(QSize(80, 42))
-        self.btn.setEnabled(False)
-
-        self.btn.setStyleSheet("""
-            QPushButton {
-                background-color: red;
-                color: white;
-                border: 2px solid #444444;
-                border-radius: 10px;
-                font-weight: bold;
+        # Outer Frame
+        self.main_frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #333333;
+                border-radius: 0px;
+            }
+            #bodyWidget {
+                background-color: #e0e0e0; 
             }
         """)
+
+        # Header
+        self.header_display.setStyleSheet(f"""
+            QLabel {{
+                background-color: {header_bg};
+                color: white;
+                border: none;
+                border-radius: 0px;
+                font-weight: bold;
+                font-size: 12px;
+            }}
+        """)
+
+        # Value 
+        value_fg = "#212529" if self.active else "#a0a0a0"
+        self.value_label.setStyleSheet(f"""
+            QLabel {{
+                color: {value_fg};
+                border: none;
+                background: transparent;
+                font-weight: bold;
+                font-size: 12px;
+            }}
+        """)
+        
+        # Button
+        self.toggle_btn.setText(btn_text)
+        self.toggle_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: #ffffff;
+                border: 1px solid #545b62;
+                border-radius: 0px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #5c636a;
+            }
+            QPushButton:pressed {
+                background-color: #495057;
+            }
+        """)
+
+class UITemperature(QWidget):
+    def __init__(self, parent, id, label):
+        super().__init__(parent)
+        self.parent = parent
+        self.id = id
+        self.label = label
+
+        self.header_color = "#8F6060"
+
+        # Outer Layout
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # Main Frame 
+        self.main_frame = QFrame()
+        outer_layout.addWidget(self.main_frame)
+
+        frame_layout = QVBoxLayout(self.main_frame)
+        frame_layout.setContentsMargins(0, 0, 0, 0)
+        frame_layout.setSpacing(0)
+
+        # Header 
+        self.header_display = QLabel(self.label)
+        self.header_display.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.header_display.setFixedHeight(20) 
+
+        # Body Container 
+        self.body_widget = QWidget()
+        self.body_widget.setObjectName("bodyWidget") 
+        
+        body_layout = QVBoxLayout(self.body_widget)
+        body_layout.setContentsMargins(6, 6, 6, 6) 
+        body_layout.setSpacing(0)
+
+        # Value Display
+        self.value_label = QLabel("-- °C")
+        self.value_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        # Layout Assembly
+        body_layout.addWidget(self.value_label)
+
+        frame_layout.addWidget(self.header_display)
+        frame_layout.addWidget(self.body_widget)
+
+        self.setFixedSize(90, 50)
+        self._apply_style()
 
     def set_value(self, val: float):
         if val is None:
-            self.btn.setText(f"{self.label}\n-- °C")
+            self.value_label.setText("-- °C")
         else:
-            self.btn.setText(f"{self.label}\n{val:.2f} °C")
+            self.value_label.setText(f"{int(val)} °C")
 
-class UIValve:
-    def __init__(self, parent, nr, request_cb):
-        self.parent = parent
-        self.nr = nr # id
-        self.status = 0 # closed/open
-        self.request_cb = request_cb # connects toggle button to device
+    def _apply_style(self):
+        # Outer Frame
+        self.main_frame.setStyleSheet("""
+            QFrame {
+                border: 2px solid #333333;
+                border-radius: 0px;
+            }
+            #bodyWidget {
+                background-color: #e0e0e0; 
+            }
+        """)
 
-        # toggle button
-        self.btn = QPushButton(f"{self.nr}", parent)
-        self.btn.setFixedSize(QSize(40, 40))
-        self.btn.clicked.connect(self.request_toggle)
-
-        self._apply_closed_style()
-
-    # requests worker to open/ close valve
-    def request_toggle(self):
-        if self.status == 0:
-            self.request_cb("open", self.nr)
-        else:
-            self.request_cb("close", self.nr)
-
-    # signal from worker when valve was opened/ closed
-    def set_status(self, current_status):
-        if self.status == current_status:
-            return  
-        self.status = current_status
-        if self.status == 0:
-            self._apply_closed_style()
-        else:
-            self._apply_open_style()
-
-    def _apply_closed_style(self):
-        self.btn.setStyleSheet("""
-            QPushButton {
-                background-color: black;
+        # Header
+        self.header_display.setStyleSheet(f"""
+            QLabel {{
+                background-color: {self.header_color};
                 color: white;
-                border: 2px solid #444444;
-                border-radius: 20px;
+                border: none;
+                border-radius: 0px;
                 font-weight: bold;
-            }
-            QPushButton:pressed {
-                background-color: #222222;
+                font-size: 12px;
+            }}
+        """)
+
+        # Value
+        self.value_label.setStyleSheet("""
+            QLabel {
+                color: #212529;
+                border: none;
+                background: transparent;
+                font-weight: bold;
+                font-size: 12px;
             }
         """)
 
-    def _apply_open_style(self):
-        self.btn.setStyleSheet("""
-            QPushButton {
-                background-color: white;
-                color: black;
-                border: 2px solid #cccccc;
-                border-radius: 20px;
-                font-weight: bold;
-            }
-            QPushButton:pressed {
-                background-color: #e0e0e0;
-            }
-        """)
+class UIValve(QWidget):
+    def __init__(self, parent, id, request_cb, orientation='vertical'):
+        super().__init__(parent)
+        self.parent = parent
+        self.id = id
+        self.open = True
+        self.orientation = orientation
+        self.request_cb = request_cb
+
+        self.setFixedSize(30, 30)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.request_toggle()
+
+    def request_toggle(self):
+        if self.open:
+            self.request_cb("close", self.id)
+        else:
+            self.request_cb("open", self.id)
+
+    def set_status(self, status):
+        if self.open != status:
+            self.open = status
+            self.update()  # Trigger repaint
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+        cx, cy = w / 2.0, h / 2.0
+
+        if self.orientation == 'vertical':
+            tri1 = QPolygonF([QPointF(2, 2), QPointF(w - 2, 2), QPointF(cx, cy)])
+            tri2 = QPolygonF([QPointF(2, h - 2), QPointF(w - 2, h - 2), QPointF(cx, cy)])
+        else:
+            tri1 = QPolygonF([QPointF(2, 2), QPointF(2, h - 2), QPointF(cx, cy)])
+            tri2 = QPolygonF([QPointF(w - 2, 2), QPointF(w - 2, h - 2), QPointF(cx, cy)])
+
+        pen = QPen(QColor("#000000"), 2)
+        brush = QBrush(QColor("#ffffff")) if self.open else QBrush(QColor("#000000"))
+        painter.setPen(pen)
+        painter.setBrush(brush)
+        painter.drawPolygon(tri1)
+        painter.drawPolygon(tri2)
 
 
 # =============================================================================
 # 2. SCHEMATIC CANVAS FRAME
 # =============================================================================
 class SchematicFrame(QFrame):
-    def __init__(self, valve_request_cb, pressure_toggle_cb=None, parent=None):     
+    def __init__(self, valve_request_cb, parent=None):     
         super().__init__(parent)
         self.valve_request_cb = valve_request_cb
-        self.pressure_toggle_cb = pressure_toggle_cb
 
-        # store valve status, pressures and temperatures
-        self.valves = {}
-        self.pressures = [None] * 10
-        self.temperatures = [None] * 3
+        self.valves = [UIValve(self, i + 1, self.valve_request_cb) for i in range(19)]
+        self.pressures = [UIPressure(self, i + 1) for i in range(10)]
+        self.temperatures = [UITemperature(self, 1, label="Trap"), UITemperature(self, 2, label="Oven 1"), UITemperature(self, 3, label="Oven 2")]
 
-        # Pressure, Valve and Temperature sizes, TODO: connect as parameters to ui components
-        self.P_WIDTH = 86
-        self.P_HEIGHT = 80
-        self.V_SIZE = 40
-        self.T_WIDTH = 80
-        self.T_HEIGHT = 42
+        self.P_WIDTH = 120 // 2
+        self.P_HEIGHT = 95 // 2
+        self.V_SIZE = 30 // 2
+        self.T_WIDTH = 90 // 2
+        self.T_HEIGHT = 55 // 2
+
+        self.START_X = 200
+        self.COL_SPACING = 150
+        self.X_OFFSETS = [self.START_X + (i * self.COL_SPACING) for i in range(5)] 
+
+        self.Y_TOP_P = 100
+        self.Y_TOP_V = 175
+        self.Y_TOP_BUS = 200
+
+        self.Y_LINE_2 = 250  
+        self.Y_H2 = 300   
+        self.Y_TRAP = 350  
+        self.Y_VACUUM = 400 
+        self.Y_LINE_1 = 450 
+
+        self.Y_BOT_BUS = 500
+        self.Y_BOT_V   = 525
+        self.Y_BOT_P   = 600
         
         self._setup_widgets()
 
     def get_active_reactors(self) -> list[int]:
-        return [p.nr for p in self.pressures if p and p.is_on]
+        return [p.id for p in self.pressures if p and p.active]
 
     def get_inactive_reactors(self) -> list[int]:
-        return [p.nr for p in self.pressures if p and not p.is_on]
+        return [p.id for p in self.pressures if p and not p.active]
 
     def _setup_widgets(self):
-        START_X = 190
-        COL_SPACING = 90
+        for i, x in enumerate(self.X_OFFSETS):
+            # Bottom Rows
+            self.pressures[i].move(x - self.P_WIDTH, self.Y_BOT_P - self.P_HEIGHT)
+            self.valves[i].move(x - self.V_SIZE, self.Y_BOT_V - self.V_SIZE)
 
-        self.Y_TOP_P = 20
-        self.Y_TOP_V = 105
-        self.Y_TOP_BUS = 165
+            # Top Rows
+            self.pressures[-(i + 1)].move(x - self.P_WIDTH, self.Y_TOP_P - self.P_HEIGHT)
+            self.valves[i + 10].move(x - self.V_SIZE, self.Y_TOP_V - self.V_SIZE)
 
-        self.Y_MID_V11     = 185  
-        self.Y_BRANCH_H2   = 245   
-        self.Y_BRANCH_TRAP = 295  
-        self.Y_BRANCH_PUMP = 345 
-        self.Y_MID_V12     = 375 
+        # Valve Line 1
+        self.valves[5].move(self.START_X - self.V_SIZE, self.Y_LINE_1 - self.V_SIZE)
 
-        self.Y_BOT_BUS = 435
-        self.Y_BOT_V   = 455
-        self.Y_BOT_P   = 515
+        # Valve Line 2
+        self.valves[9].move(self.START_X - self.V_SIZE, self.Y_LINE_2 - self.V_SIZE)
+        
+        # Valve Vacuum
+        self.valves[6].move(self.START_X - self.V_SIZE + 50, self.Y_VACUUM - self.V_SIZE)
 
-        # Reactors 10 -> 6 (Left to Right) with corresponding valves
-        top_reactors = [10, 9, 8, 7, 6]
-        for i, nr in enumerate(top_reactors):
-            cx = START_X + (i * COL_SPACING)
-            p = UIPressure(self, nr, self.pressure_toggle_cb)
-            p.move(cx - self.P_WIDTH // 2, self.Y_TOP_P)
-            self.pressures[nr - 1] = p
+        # Valve Trap
+        self.valves[7].move(self.START_X - self.V_SIZE - 50, self.Y_TRAP - self.V_SIZE)
 
-            v = UIValve(self, nr, self.valve_request_cb)
-            v.btn.move(cx - self.V_SIZE // 2, self.Y_TOP_V)
-            self.valves[nr] = v
+        # Valve H2
+        self.valves[8].move(self.START_X - self.V_SIZE + 50, self.Y_H2 - self.V_SIZE)
 
-        # Reactors 1 -> 5 (Left to Right)  with corresponding valves
-        bot_reactors = [1, 2, 3, 4, 5]
-        for i, nr in enumerate(bot_reactors):
-            cx = START_X + (i * COL_SPACING)
-            v = UIValve(self, nr, self.valve_request_cb)
-            v.btn.move(cx - self.V_SIZE // 2, self.Y_BOT_V)
-            self.valves[nr] = v
+        # Trap
+        self.temperatures[0].move(self.START_X - self.T_WIDTH - self.COL_SPACING, self.Y_TRAP - self.T_HEIGHT)
 
-            p = UIPressure(self, nr, self.pressure_toggle_cb)
-            p.move(cx - self.P_WIDTH // 2, self.Y_BOT_P)
-            self.pressures[nr - 1] = p
+        # Oven 1
+        self.temperatures[1].move(self.X_OFFSETS[-2] - self.T_WIDTH, self.Y_LINE_1 - self.T_HEIGHT)
 
-        # Other valves
-        col0_x = START_X
-        v11 = UIValve(self, 11, self.valve_request_cb)
-        v11.btn.move(col0_x - self.V_SIZE // 2, self.Y_MID_V11)
-        self.valves[11] = v11
-
-        v12 = UIValve(self, 12, self.valve_request_cb)
-        v12.btn.move(col0_x - self.V_SIZE // 2, self.Y_MID_V12)
-        self.valves[12] = v12
-
-        v13 = UIValve(self, 13, self.valve_request_cb)
-        v13.btn.move(col0_x + 35, self.Y_BRANCH_H2 - self.V_SIZE // 2)
-        self.valves[13] = v13
-
-        v14 = UIValve(self, 14, self.valve_request_cb)
-        v14.btn.move(col0_x - 75, self.Y_BRANCH_TRAP - self.V_SIZE // 2)
-        self.valves[14] = v14
-
-        v15 = UIValve(self, 15, self.valve_request_cb)
-        v15.btn.move(col0_x + 35, self.Y_BRANCH_PUMP - self.V_SIZE // 2)
-        self.valves[15] = v15
-
-        # Temperature Sensors (Oven 1, Oven 2, Trap)
-        t2 = UITemperature(self, 2, label="Oven 2")
-        t2.btn.move(START_X + (3 * COL_SPACING), self.Y_TOP_BUS + 20)
-        self.temperatures[0] = t2
-
-        t1 = UITemperature(self, 1, label="Oven 1")
-        t1.btn.move(START_X + (3 * COL_SPACING), self.Y_BOT_BUS - 60)
-        self.temperatures[1] = t1
-
-        t3 = UITemperature(self, 3, label="Trap")
-        t3.btn.move(col0_x - 180, self.Y_BRANCH_TRAP - (self.T_HEIGHT // 2))
-        self.temperatures[2] = t3
-
-        self.temperatures = [t1, t2, t3]
+        # Oven 2
+        self.temperatures[2].move(self.X_OFFSETS[-2] - self.T_WIDTH, self.Y_LINE_2 - self.T_HEIGHT)
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -301,88 +369,68 @@ class SchematicFrame(QFrame):
         painter.setPen(pen)
         painter.setBrush(QColor(0, 0, 0))
 
-        START_X = 190
-        COL_SPACING = 90
-        col0_x = START_X
-        col_end_x = START_X + (4 * COL_SPACING)
+        col_start_x = self.START_X
+        col_end_x = self.X_OFFSETS[-1]
 
-        # --- Top and Bottom Bus Bars ---
-        painter.drawLine(QPoint(col0_x, self.Y_TOP_BUS), QPoint(col_end_x, self.Y_TOP_BUS))
-        painter.drawLine(QPoint(col0_x, self.Y_BOT_BUS), QPoint(col_end_x, self.Y_BOT_BUS))
+        # Horizontal Connections
+        painter.drawLine(QPoint(col_start_x, self.Y_TOP_BUS), QPoint(col_end_x, self.Y_TOP_BUS))
+        painter.drawLine(QPoint(col_start_x, self.Y_BOT_BUS), QPoint(col_end_x, self.Y_BOT_BUS))
 
-        # --- Vertical Column Pipes ---
-        for i in range(5):
-            cx = START_X + (i * COL_SPACING)
+        painter.drawLine(QPoint(col_start_x, self.Y_TOP_BUS), QPoint(col_start_x, self.Y_LINE_2 - self.V_SIZE))
+        painter.drawLine(QPoint(col_start_x, self.Y_LINE_2 + self.V_SIZE), QPoint(col_start_x, self.Y_LINE_1 - self.V_SIZE))
+        painter.drawLine(QPoint(col_start_x, self.Y_LINE_1 + self.V_SIZE), QPoint(col_start_x, self.Y_BOT_BUS))
 
-            # Top Column: P -> Valve -> Bus
-            painter.drawLine(QPoint(cx, self.Y_TOP_P + self.P_HEIGHT), QPoint(cx, self.Y_TOP_V))
-            painter.drawLine(QPoint(cx, self.Y_TOP_V + self.V_SIZE), QPoint(cx, self.Y_TOP_BUS))
+        # Vertical Connections
+        for x in self.X_OFFSETS:
+            # Top Row
+            painter.drawLine(QPoint(x, self.Y_TOP_P), QPoint(x, self.Y_TOP_V))
+            painter.drawLine(QPoint(x, self.Y_TOP_V + self.V_SIZE), QPoint(x, self.Y_TOP_BUS))
 
-            # Bottom Column: Bus -> Valve -> P
-            painter.drawLine(QPoint(cx, self.Y_BOT_BUS), QPoint(cx, self.Y_BOT_V))
-            painter.drawLine(QPoint(cx, self.Y_BOT_V + self.V_SIZE), QPoint(cx, self.Y_BOT_P))
+            # Bottom Row
+            painter.drawLine(QPoint(x, self.Y_BOT_BUS), QPoint(x, self.Y_BOT_V))
+            painter.drawLine(QPoint(x, self.Y_BOT_V + self.V_SIZE), QPoint(x, self.Y_BOT_P))
 
-            # Junction Nodes
-            painter.drawEllipse(QPoint(cx, self.Y_TOP_BUS), 3, 3)
-            painter.drawEllipse(QPoint(cx, self.Y_BOT_BUS), 3, 3)
+            # Junctions
+            painter.drawEllipse(QPoint(x, self.Y_TOP_BUS), 3, 3)
+            painter.drawEllipse(QPoint(x, self.Y_BOT_BUS), 3, 3)
 
-        # --- Central Trunk Line (Column 0) ---
-        painter.drawLine(QPoint(col0_x, self.Y_TOP_BUS), QPoint(col0_x, self.Y_MID_V11))
-        painter.drawLine(QPoint(col0_x, self.Y_MID_V11 + self.V_SIZE), QPoint(col0_x, self.Y_MID_V12))
-        painter.drawLine(QPoint(col0_x, self.Y_MID_V12 + self.V_SIZE), QPoint(col0_x, self.Y_BOT_BUS))
+        # H2 
 
-        # --- Branch Piping ---
-        # 1. H2 Branch
-        h2_end_x = col0_x + 105
-        painter.drawEllipse(QPoint(col0_x, self.Y_BRANCH_H2), 3, 3)
-        painter.drawLine(QPoint(col0_x, self.Y_BRANCH_H2), QPoint(h2_end_x, self.Y_BRANCH_H2))
+        painter.drawEllipse(QPoint(col_start_x, self.Y_H2), 3, 3)
+        painter.drawLine(QPoint(col_start_x, self.Y_H2), QPoint(self.X_OFFSETS[1] - 30, self.Y_H2))
 
-        # 2. Trap Branch & Bypass Line
-        trap_left_x = col0_x - 180
-        trap_right_x = col0_x - 100
-        painter.drawEllipse(QPoint(col0_x, self.Y_BRANCH_TRAP), 3, 3)
-        painter.drawLine(QPoint(col0_x, self.Y_BRANCH_TRAP), QPoint(trap_right_x, self.Y_BRANCH_TRAP))
+        # Trap
+        painter.drawEllipse(QPoint(col_start_x, self.Y_TRAP), 3, 3)
+        painter.drawLine(QPoint(col_start_x, self.Y_TRAP), QPoint(col_start_x - 50, self.Y_TRAP))
 
-        # Trap bypass piping loop
-        loop_pen = QPen(QColor(0, 0, 0), 2)
-        painter.setPen(loop_pen)
-        painter.setBrush(QtCore.Qt.BrushStyle.NoBrush)
-        
-        path = QPainterPath()
-        path.moveTo(trap_right_x, self.Y_BRANCH_TRAP)
-        path.lineTo(trap_right_x - 10, self.Y_BRANCH_TRAP + 15)
-        path.lineTo(trap_left_x + 10, self.Y_BRANCH_TRAP + 15)
-        path.lineTo(trap_left_x, self.Y_BRANCH_TRAP)
-        painter.drawPath(path)
+        # Vacuum
+        painter.drawEllipse(QPoint(col_start_x, self.Y_VACUUM), 3, 3)
+        painter.drawLine(QPoint(col_start_x, self.Y_VACUUM), QPoint(self.X_OFFSETS[1] - 30, self.Y_VACUUM))
 
-        # 3. Vacuum Pump Branch
-        pump_end_x = col0_x + 105
-        painter.setBrush(QColor(0, 0, 0))
-        painter.drawEllipse(QPoint(col0_x, self.Y_BRANCH_PUMP), 3, 3)
-        painter.drawLine(QPoint(col0_x, self.Y_BRANCH_PUMP), QPoint(pump_end_x, self.Y_BRANCH_PUMP))
-
-        # --- Vector Graphic Schematics ---
-        # H2 Cylinder
-        h2_rect = QtCore.QRect(h2_end_x, self.Y_BRANCH_H2 - 35, 36, 70)
+        # H2 Drawing
+        h2_height = 80
+        h2_width = 30
+        h2_rect = QtCore.QRect(self.X_OFFSETS[1] - 30 - h2_width // 2, self.Y_H2 - h2_height // 2, h2_width, h2_height)
         painter.setPen(QPen(QColor("#222222"), 2))
         painter.setBrush(QColor("#6c757d"))
-        painter.drawRoundedRect(h2_rect, 14, 14)
+        painter.drawRoundedRect(h2_rect, 10, 10)
         painter.setPen(QPen(QColor("white")))
         font = painter.font()
         font.setBold(True)
         painter.setFont(font)
         painter.drawText(h2_rect, QtCore.Qt.AlignmentFlag.AlignCenter, "H₂")
 
-        # Vacuum Pump
-        pump_center = QPoint(pump_end_x + 18, self.Y_BRANCH_PUMP)
+        # Vacuum Drawing
+        vac_size = 16
+        pump_center = QPoint(self.X_OFFSETS[1] - 30 , self.Y_VACUUM)
         painter.setPen(QPen(QColor("#222222"), 2))
         painter.setBrush(QColor("#e0e0e0"))
-        painter.drawEllipse(pump_center, 18, 18)
+        painter.drawEllipse(pump_center, vac_size, vac_size)
         
         painter.setBrush(QColor("#222222"))
         triangle = [
-            QPoint(pump_center.x() - 10, pump_center.y() + 8),
-            QPoint(pump_center.x() + 10, pump_center.y() + 8),
+            QPoint(pump_center.x() - 10, pump_center.y() + 6),
+            QPoint(pump_center.x() + 10, pump_center.y() + 6),
             QPoint(pump_center.x(), pump_center.y() - 10)
         ]
         painter.drawPolygon(triangle)
@@ -397,8 +445,8 @@ class ControlTab(QtWidgets.QWidget):
 
         # Schematic
         left_container = QtWidgets.QVBoxLayout()
-        self.schematic = SchematicFrame(valve_request_cb, pressure_toggle_cb, self)
-        self.schematic.setFixedSize(620, 660)
+        self.schematic = SchematicFrame(valve_request_cb, self)
+        self.schematic.setFixedSize(1000, 750)
         left_container.addWidget(self.schematic)
 
         # Add Oxidize Iron action button underneath schematic
@@ -434,7 +482,7 @@ class ControlTab(QtWidgets.QWidget):
         self.curves = []
         for p in self.schematic.pressures:
             pen = pg.mkPen(color=p.color, width=2)
-            curve = self.plot_widget.plot(pen=pen, name=f"P{p.nr}")
+            curve = self.plot_widget.plot(pen=pen, name=f"P{p.id}")
             self.curves.append(curve)
 
         layout.addWidget(self.plot_widget)
@@ -613,7 +661,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(self.tabs)
 
         self.control_tab = ControlTab(
-            valve_request_cb=self.smc_worker.send_request,
+            valve_request_cb=self.smc_worker.request,
             oxidize_request_cb=self.request_oxidize_iron
         )
         self.parameters_tab = ParametersTab()
@@ -622,7 +670,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tabs.addTab(self.parameters_tab, "Parameters & Configuration")
 
     def request_oxidize_iron(self):
-        self.proc_worker.send_request("oxidise_iron")
+        self.proc_worker.request("oxidise_iron")
 
     def handle_pressure_update(self, vals: list):
         masked_vals = []
@@ -630,7 +678,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if i < len(self.control_tab.schematic.pressures):
                 p_btn = self.control_tab.schematic.pressures[i]
                 # If reactor toggle is off, force value to None
-                if not p_btn.is_on:
+                if not p_btn.active:
                     masked_vals.append(None)
                     continue
             masked_vals.append(val)
@@ -676,9 +724,9 @@ if __name__ == "__main__":
     window = MainWindow(smc_worker_thread, proc, proc_worker_thread)
 
     # Connect Asynchronous Worker Threads to the GUI
-    keller_worker_thread.data_update.connect(window.handle_pressure_update)
-    tm_worker_thread.data_update.connect(window.handle_temperature_update)
-    smc_worker_thread.data_update.connect(window.handle_valve_status_update)
+    keller_worker_thread.update.connect(window.handle_pressure_update)
+    tm_worker_thread.update.connect(window.handle_temperature_update)
+    smc_worker_thread.update.connect(window.handle_valve_status_update)
 
     # Start Workers
     keller_worker_thread.start() 
