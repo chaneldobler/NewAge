@@ -222,7 +222,10 @@ class SmcDevNet:
 if __name__ == "__main__":
     smc = SmcDevNet()
     smc.start()
-    smc.open_multiple(smc.h2 + smc.reactors)
+    smc.open(19)
+    time.sleep(2)
+    smc.open(18)
     print(smc.get_status_all())
-    time.sleep(2.0)
+    time.sleep(30)
+    smc.start()
     smc.stop()

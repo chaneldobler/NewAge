@@ -5,43 +5,43 @@
   "reactors": [
     {
       "name": "Reactor 1",
-      "address": "0x40"
+      "address": "0x50"
     },
     {
       "name": "Reactor 2",
-      "address": "0x41"
+      "address": "0x51"
     },
     {
       "name": "Reactor 3",
-      "address": "0x42"
+      "address": "0x52"
     },
     {
       "name": "Reactor 4",
-      "address": "0x43"
+      "address": "0x53"
     },
     {
       "name": "Reactor 5",
-      "address": "0x44"
+      "address": "0x54"
     },
     {
       "name": "Reactor 6",
-      "address": "0x45"
+      "address": "0x55"
     },
     {
       "name": "Reactor 7",
-      "address": "0x46"
+      "address": "0x56"
     },
     {
       "name": "Reactor 8",
-      "address": "0x47"
+      "address": "0x57"
     },    
     {
       "name": "Reactor 9",
-      "address": "0x48"
+      "address": "0x58"
     },
     {
       "name": "Reactor 10",
-      "address": "0x49"
+      "address": "0x59"
     }
   ]
 }
