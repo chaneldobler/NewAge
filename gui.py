@@ -239,7 +239,7 @@ class UIValve(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.id = id
-        self.open = True
+        self.open = False
         self.orientation = orientation
         self.request_cb = request_cb
 
@@ -290,7 +290,7 @@ class SchematicFrame(QFrame):
         super().__init__(parent)
         self.valve_request_cb = valve_request_cb
 
-        self.valves = [UIValve(self, i + 1, self.valve_request_cb) for i in range(19)]
+        self.valves = [UIValve(self, i + 1, self.valve_request_cb, orientation='horizontal' if i in (6, 7, 8) else 'vertical') for i in range(19)]
         self.pressures = [UIPressure(self, i + 1) for i in range(10)]
         self.temperatures = [UITemperature(self, 1, label="Trap"), UITemperature(self, 2, label="Oven 1"), UITemperature(self, 3, label="Oven 2")]
 
@@ -304,19 +304,19 @@ class SchematicFrame(QFrame):
         self.COL_SPACING = 150
         self.X_OFFSETS = [self.START_X + (i * self.COL_SPACING) for i in range(5)] 
 
-        self.Y_TOP_P = 100
-        self.Y_TOP_V = 175
-        self.Y_TOP_BUS = 200
+        self.Y_TOP_P = 50
+        self.Y_TOP_V = 125
+        self.Y_TOP_BUS = 150
 
-        self.Y_LINE_2 = 250  
-        self.Y_H2 = 300   
-        self.Y_TRAP = 350  
-        self.Y_VACUUM = 400 
-        self.Y_LINE_1 = 450 
+        self.Y_LINE_2 = 200  
+        self.Y_H2 = 250
+        self.Y_TRAP = 300  
+        self.Y_VACUUM = 350 
+        self.Y_LINE_1 = 400 
 
-        self.Y_BOT_BUS = 500
-        self.Y_BOT_V   = 525
-        self.Y_BOT_P   = 600
+        self.Y_BOT_BUS = 450
+        self.Y_BOT_V   = 475
+        self.Y_BOT_P   = 550
         
         self._setup_widgets()
 
@@ -343,16 +343,16 @@ class SchematicFrame(QFrame):
         self.valves[9].move(self.START_X - self.V_SIZE, self.Y_LINE_2 - self.V_SIZE)
         
         # Valve Vacuum
-        self.valves[6].move(self.START_X - self.V_SIZE + 50, self.Y_VACUUM - self.V_SIZE)
+        self.valves[6].move(self.START_X - self.V_SIZE + 25, self.Y_VACUUM - self.V_SIZE)
 
         # Valve Trap
-        self.valves[7].move(self.START_X - self.V_SIZE - 50, self.Y_TRAP - self.V_SIZE)
+        self.valves[7].move(self.START_X - self.V_SIZE - 25, self.Y_TRAP - self.V_SIZE)
 
         # Valve H2
-        self.valves[8].move(self.START_X - self.V_SIZE + 50, self.Y_H2 - self.V_SIZE)
+        self.valves[8].move(self.START_X - self.V_SIZE + 25, self.Y_H2 - self.V_SIZE)
 
         # Trap
-        self.temperatures[0].move(self.START_X - self.T_WIDTH - self.COL_SPACING, self.Y_TRAP - self.T_HEIGHT)
+        self.temperatures[0].move(self.START_X - self.T_WIDTH - 100, self.Y_TRAP - self.T_HEIGHT)
 
         # Oven 1
         self.temperatures[1].move(self.X_OFFSETS[-2] - self.T_WIDTH, self.Y_LINE_1 - self.T_HEIGHT)
@@ -395,22 +395,21 @@ class SchematicFrame(QFrame):
             painter.drawEllipse(QPoint(x, self.Y_BOT_BUS), 3, 3)
 
         # H2 
-
         painter.drawEllipse(QPoint(col_start_x, self.Y_H2), 3, 3)
-        painter.drawLine(QPoint(col_start_x, self.Y_H2), QPoint(self.X_OFFSETS[1] - 30, self.Y_H2))
+        painter.drawLine(QPoint(col_start_x, self.Y_H2), QPoint(col_start_x + 75, self.Y_H2))
 
         # Trap
         painter.drawEllipse(QPoint(col_start_x, self.Y_TRAP), 3, 3)
-        painter.drawLine(QPoint(col_start_x, self.Y_TRAP), QPoint(col_start_x - 50, self.Y_TRAP))
+        painter.drawLine(QPoint(col_start_x, self.Y_TRAP), QPoint(col_start_x - 100, self.Y_TRAP))
 
         # Vacuum
         painter.drawEllipse(QPoint(col_start_x, self.Y_VACUUM), 3, 3)
-        painter.drawLine(QPoint(col_start_x, self.Y_VACUUM), QPoint(self.X_OFFSETS[1] - 30, self.Y_VACUUM))
+        painter.drawLine(QPoint(col_start_x, self.Y_VACUUM), QPoint(col_start_x + 75, self.Y_VACUUM))
 
         # H2 Drawing
         h2_height = 80
         h2_width = 30
-        h2_rect = QtCore.QRect(self.X_OFFSETS[1] - 30 - h2_width // 2, self.Y_H2 - h2_height // 2, h2_width, h2_height)
+        h2_rect = QtCore.QRect(col_start_x + 75 - h2_width // 2, self.Y_H2 - h2_height // 2, h2_width, h2_height)
         painter.setPen(QPen(QColor("#222222"), 2))
         painter.setBrush(QColor("#6c757d"))
         painter.drawRoundedRect(h2_rect, 10, 10)
@@ -422,7 +421,7 @@ class SchematicFrame(QFrame):
 
         # Vacuum Drawing
         vac_size = 16
-        pump_center = QPoint(self.X_OFFSETS[1] - 30 , self.Y_VACUUM)
+        pump_center = QPoint(col_start_x + 75, self.Y_VACUUM)
         painter.setPen(QPen(QColor("#222222"), 2))
         painter.setBrush(QColor("#e0e0e0"))
         painter.drawEllipse(pump_center, vac_size, vac_size)
@@ -435,6 +434,22 @@ class SchematicFrame(QFrame):
         ]
         painter.drawPolygon(triangle)
 
+        # Peltier Drawing
+        peltier_height = 28
+        peltier_width = 80
+        peltier_rect_1 = QtCore.QRect(self.X_OFFSETS[2] - peltier_width // 2, self.Y_LINE_1 - peltier_height // 2, peltier_width, peltier_height)
+        peltier_rect_2 = QtCore.QRect(self.X_OFFSETS[2] - peltier_width // 2, self.Y_LINE_2 - peltier_height // 2, peltier_width, peltier_height)
+        painter.setPen(QPen(QColor("#222222"), 2))
+        painter.setBrush(QColor("#606A8F"))
+        painter.drawRect(peltier_rect_1)
+        painter.drawRect(peltier_rect_2)
+        painter.setPen(QPen(QColor("white")))
+        font = painter.font()
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(peltier_rect_1, QtCore.Qt.AlignmentFlag.AlignCenter, "Peltier 1")
+        painter.drawText(peltier_rect_2, QtCore.Qt.AlignmentFlag.AlignCenter, "Peltier 2")
+
 # =============================================================================
 # 3. TAB 1: CONTROL VIEW
 # =============================================================================
@@ -446,7 +461,7 @@ class ControlTab(QtWidgets.QWidget):
         # Schematic
         left_container = QtWidgets.QVBoxLayout()
         self.schematic = SchematicFrame(valve_request_cb, self)
-        self.schematic.setFixedSize(1000, 750)
+        self.schematic.setFixedSize(900, 700)
         left_container.addWidget(self.schematic)
 
         # Add Oxidize Iron action button underneath schematic
@@ -692,14 +707,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def handle_temperature_update(self, vals: list):
         self.control_tab.update_temperatures(vals)
 
-    def handle_valve_status_update(self, valves: list):
+    def handle_valve_status_update(self, valve_states: list):
         schematic = self.control_tab.schematic
-        active_set = set(valves)
-
-        for valve_nr, valve in schematic.valves.items(): 
-            if valve is not None:
-                status = 1 if valve_nr in active_set else 0
-                valve.set_status(status)
+        
+        # Iterate over the visual UIValve widgets, matching each with the hardware state array
+        for i, valve_ui in enumerate(schematic.valves):
+            if i < len(valve_states) and valve_states[i] is not None:
+                # Assuming valve_states contains boolean or 1/0 open indicators
+                is_open = bool(valve_states[i])
+                valve_ui.set_status(is_open)
 
 
 # =============================================================================
