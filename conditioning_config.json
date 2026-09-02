@@ -1,6 +1,6 @@
 {
   "iron_oxidation": {
-    "threshold_pressure": 0.8,
+    "threshold_pressure": 0.8, 
     "conditioning_oven_temperature": 500,
     "preheat_iron_duration": 300
   },

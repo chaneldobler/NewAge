@@ -36,10 +36,10 @@ class SmcDevNet:
     def to_mask(self, idx):
         return list(sum(1 << (i - 1) for i in idx).to_bytes(3, byteorder='little'))
 
-    # transform a bitmask to a set of indices
+    # transform a bitmask to a list
     def to_list(self, mask):
         mask_int = int.from_bytes(mask, byteorder='little')
-        return [i + 1 for i in range(19) if (mask_int >> i) & 1]
+        return [(mask_int >> i) & 1 for i in range(19)]
 
     def ip_link_up(self):
         try:
@@ -140,9 +140,11 @@ class SmcDevNet:
         # Group, Destination, Transmit message across explicit connection
         cid = self.gr_2_id | self.smc_id | 4
 
-        # Retrieve current status, Set target bits
-        current = int.from_bytes(bytes(self.get_status_all), byteorder='little')
-        additional = int.from_bytes(bytes(self.to_mask(idx)), byteorder='little')
+        status = self.get_status_all()
+        current = sum(bit << i for i, bit in enumerate(status))
+        
+        additional = int.from_bytes(self.to_mask(idx), byteorder='little')
+        
         mask = current | additional
         payload = list(mask.to_bytes(3, byteorder='little'))
 
@@ -173,9 +175,11 @@ class SmcDevNet:
         # Group, Destination, Transmit message across explicit connection
         cid = self.gr_2_id | self.smc_id | 4
 
-        # Retrieve current status, Clear target bits
-        current = int.from_bytes(bytes(self.get_status_all), byteorder='little')
-        additional = int.from_bytes(bytes(self.to_mask(idx)), byteorder='little')
+        status = self.get_status_all()
+        current = sum(bit << i for i, bit in enumerate(status))
+        
+        additional = int.from_bytes(self.to_mask(idx), byteorder='little')
+        
         mask = current & ~additional
         payload = list(mask.to_bytes(3, byteorder='little'))
 
@@ -222,10 +226,11 @@ class SmcDevNet:
 if __name__ == "__main__":
     smc = SmcDevNet()
     smc.start()
-    smc.open(19)
-    time.sleep(2)
-    smc.open(18)
+    smc.open(2)
+    time.sleep(1)
+    smc.open_multiple([1, 3])
+    time.sleep(1)
+    smc.close_multiple([1, 4])
     print(smc.get_status_all())
-    time.sleep(30)
-    smc.start()
+    time.sleep(1)
     smc.stop()

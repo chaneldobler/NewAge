@@ -1,8 +1,13 @@
 
 import sys
+import numpy
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtCore import Qt
+
+import keller, smc, tm
+import worker
+import procedures
 
 class Reactor(QWidget):
     def __init__(self, parent, id):
@@ -14,7 +19,7 @@ class Reactor(QWidget):
         self.active = True 
 
         # Colored Header
-        self.color = QColor.fromHslF((self.id - 1) / 10.0, 0.75, 0.45)
+        self.color = QColor.fromHslF(((self.id + 4)/12) % 1, 0.95, 0.45)
         self.header = QLabel(f"Reactor {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Value Display
@@ -36,6 +41,7 @@ class Reactor(QWidget):
         self.content.addWidget(self.header)
         self.content.addWidget(self.display)
         self.content.addWidget(self.button)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -118,6 +124,7 @@ class Oven(QWidget):
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
         self.content.addWidget(self.display)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -151,7 +158,7 @@ class Oven(QWidget):
     def set_status(self, status: bool):
         if self.active != status:
             self.active = status
-            self.update
+            self.update()
 
 class Trap(QWidget):
     def __init__(self, parent, id):
@@ -178,6 +185,7 @@ class Trap(QWidget):
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
         self.content.addWidget(self.display)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -224,6 +232,7 @@ class Peltier(QWidget):
         # Box Content
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -249,7 +258,7 @@ class Peltier(QWidget):
     def set_status(self, status: bool):
         if self.active != status:
             self.active = status
-            self.update
+            self.update()
 
 class Valve(QWidget):
     def __init__(self, parent, id, request=None):
@@ -281,27 +290,28 @@ class Valve(QWidget):
                 self.request("open", self.id)
 
     def update(self):
-        self.button.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: #ffffff;
+        color = "#ffffff" if self.active else "#000000"
+        self.button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
+                color: #bcbcbc;
                 border: 1px solid #545b62;
                 border-radius: 10px;
                 font-weight: bold;
                 font-size: 12px;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #5c636a;
-            }
-            QPushButton:pressed {
+            }}
+            QPushButton:pressed {{
                 background-color: #495057;
-            }
+            }}
         """)
 
     def set_status(self, status: bool):
         if self.active != status:
             self.active = status
-            self.update
+            self.update()
 
 class H2(QWidget):
     def __init__(self, parent):
@@ -320,6 +330,7 @@ class H2(QWidget):
         # Box Content
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -355,6 +366,7 @@ class Vacuum(QWidget):
         # Box Content
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -390,6 +402,7 @@ class Switch(QWidget):
         # Box Content
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
+        self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
         self.container = QVBoxLayout(self)
@@ -412,87 +425,62 @@ class Schematic(QWidget):
     def __init__(self, parent, request=None):
         super().__init__(parent)
         self.parent = parent
-        self.request = request
+        self.request = request if request is not None else (lambda *args, **kwargs: None)
 
         # ----- Grid Layout -----
-
         self.grid = QGridLayout(self)
 
-        # Reactor Line 1
+        # Reactors
         self.reactor_line_1 = [Reactor(self, i + 1) for i in range(5)]
         for i, reactor in enumerate(self.reactor_line_1):
             self.grid.addWidget(reactor, 10, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Reactor Line 2
         self.reactor_line_2 = [Reactor(self, i + 6) for i in range(5)]
         for i, reactor in enumerate(self.reactor_line_2):
             self.grid.addWidget(reactor, 0, 8 - i, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Valve Line 1
-        self.valve_line_1 = [Valve(self, i + 1) for i in range(5)]
+        # Valves
+        self.valve_line_1 = [Valve(self, i + 1, self.request) for i in range(5)]
         for i, valve in enumerate(self.valve_line_1):
             self.grid.addWidget(valve, 9, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Valve Line 2
-        self.valve_line_2 = [Valve(self, i + 11) for i in range(5)]
+        self.valve_line_2 = [Valve(self, i + 11, self.request) for i in range(5)]
         for i, valve in enumerate(self.valve_line_2):
             self.grid.addWidget(valve, 1, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Valve Gate 1
-        self.valve_gate_1 = Valve(self, 6)
+        self.valve_gate_1 = Valve(self, 6, self.request)
         self.grid.addWidget(self.valve_gate_1, 7, 4, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Valve Gate 2
-        self.valve_gate_2 = Valve(self, 10)
+        self.valve_gate_2 = Valve(self, 10, self.request)
         self.grid.addWidget(self.valve_gate_2, 3, 4, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Valve Vacuum
-        self.valve_vacuum = Valve(self, 7)
+        self.valve_vacuum = Valve(self, 7, self.request)
         self.grid.addWidget(self.valve_vacuum, 6, 5, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Valve Trap
-        self.valve_trap = Valve(self, 8)
+        self.valve_trap = Valve(self, 8, self.request)
         self.grid.addWidget(self.valve_trap, 5, 3, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Valve H2
-        self.valve_h2 = Valve(self, 9)
+        self.valve_h2 = Valve(self, 9, self.request)
         self.grid.addWidget(self.valve_h2, 4, 5, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Ovens
+        # Heaters
         self.ovens = [Oven(self, i + 1) for i in range(2)]
-        self.grid.addWidget(self.ovens[0], 6, 8, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.ovens[1], 4, 8, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Trap
+        self.grid.addWidget(self.ovens[0], 7, 8, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.ovens[1], 3, 8, alignment=Qt.AlignmentFlag.AlignCenter)
         self.trap = Trap(self, 1)
         self.grid.addWidget(self.trap, 4, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Peltiers
         self.peltiers = [Peltier(self, i + 1) for i in range(2)]
-        self.grid.addWidget(self.peltiers[0], 6, 7, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.peltiers[1], 4, 7, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.peltiers[0], 7, 7, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.peltiers[1], 3, 7, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # H2
+        # Symbols
         self.h2 = H2(self)
         self.grid.addWidget(self.h2, 4, 6, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Vacuum
         self.vacuum = Vacuum(self)
         self.grid.addWidget(self.vacuum, 6, 6, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Switch
         self.switch = Switch(self)
         self.grid.addWidget(self.switch, 6, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # ----- Collections -----
-
-        # Heaters
         self.heaters = [self.trap] + self.ovens
-
-        # Reactors
         self.reactors = self.reactor_line_1 + self.reactor_line_2
-
-        # Valves
         self.valves = self.valve_line_1 \
             + [self.valve_gate_1, self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_gate_2] \
             + self.valve_line_2
