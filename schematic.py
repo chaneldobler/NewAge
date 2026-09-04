@@ -1,6 +1,7 @@
 
 import sys
 import numpy
+import json
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtCore import Qt
@@ -17,6 +18,7 @@ class Reactor(QWidget):
         # Properties
         self.id = id
         self.active = True 
+        self.value = 0
 
         # Colored Header
         self.color = QColor.fromHslF(((self.id + 4)/12) % 1, 0.95, 0.45)
@@ -90,6 +92,7 @@ class Reactor(QWidget):
         """)
 
     def set_value(self, val: float):
+        self.value = val
         if not self.active:
             self.display.setText("")
         elif val is None:
@@ -106,13 +109,16 @@ class Oven(QWidget):
         # Properties
         self.id = id
         self.active = True 
+        self.heating = False
+        self.value = 0
 
         # Colored Header
-        self.color = QColor.fromHslF(0, 0.25, 0.45)
+        self.color = QColor.fromHslF(0, 0.5, 0.45)
         self.header = QLabel(f"Oven {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Value Display
+        # Value and Heating Display
         self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
+        self.running = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignRight)
 
         # Box Frame
         self.frame = QFrame(self)
@@ -124,6 +130,7 @@ class Oven(QWidget):
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
         self.content.addWidget(self.display)
+        self.content.addWidget(self.running)
         self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
@@ -148,6 +155,7 @@ class Oven(QWidget):
         """)
 
     def set_value(self, val: float):
+        self.value = val
         if not self.active:
             self.display.setText("")
         elif val is None:
@@ -160,6 +168,14 @@ class Oven(QWidget):
             self.active = status
             self.update()
 
+    def set_running(self, status: bool):
+        if self.heating != status:
+            if status is True:
+                self.running.setText("Heating ON")
+            else:
+                self.running.setText("Heating OFF")
+
+        
 class Trap(QWidget):
     def __init__(self, parent, id):
         super().__init__(parent)
@@ -167,13 +183,16 @@ class Trap(QWidget):
 
         # Properties
         self.id = id
+        self.heating = False
+        self.value = 0
 
         # Colored Header
-        self.color = QColor.fromHslF(0, 0.25, 0.45)
+        self.color = QColor.fromHslF(0, 0.5, 0.45)
         self.header = QLabel(f"Trap", alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Value Display
         self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
+        self.running = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignRight)
 
         # Box Frame
         self.frame = QFrame(self)
@@ -185,6 +204,7 @@ class Trap(QWidget):
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
         self.content.addWidget(self.display)
+        self.content.addWidget(self.running)
         self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
@@ -205,10 +225,18 @@ class Trap(QWidget):
         """)
 
     def set_value(self, val: float):
+        self.value = val
         if val is None:
             self.display.setText("-- °C")
         else:
             self.display.setText(f"{val} °C")
+
+    def set_running(self, status: bool):
+        if self.heating != status:
+            if status is True:
+                self.running.setText("Heating ON")
+            else:
+                self.running.setText("Heating OFF")
 
 class Peltier(QWidget):
     def __init__(self, parent, id):
@@ -218,10 +246,14 @@ class Peltier(QWidget):
         # Properties
         self.id = id
         self.active = True 
+        self.cooling = False
 
         # Colored Header
-        self.color = QColor.fromHslF(0.5, 0.25, 0.45)
+        self.color = QColor.fromHslF(0.5, 0.5, 0.45)
         self.header = QLabel(f"Peltier {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Display 
+        self.running = QLabel("Cooling OFF", alignment=Qt.AlignmentFlag.AlignRight)
 
         # Box Frame
         self.frame = QFrame(self)
@@ -232,6 +264,7 @@ class Peltier(QWidget):
         # Box Content
         self.content = QVBoxLayout(self.frame)
         self.content.addWidget(self.header)
+        self.content.addWidget(self.running)
         self.content.setContentsMargins(4, 4, 4, 4)
 
         # Box Container
@@ -259,6 +292,13 @@ class Peltier(QWidget):
         if self.active != status:
             self.active = status
             self.update()
+
+    def set_running(self, status: bool):
+        if self.cooling != status:
+            if status is True:
+                self.running.setText("Cooling ON")
+            else:
+                self.running.setText("Cooling OFF")
 
 class Valve(QWidget):
     def __init__(self, parent, id, request=None):
@@ -284,10 +324,7 @@ class Valve(QWidget):
 
     def request_toggle(self):
         if self.request is not None:
-            if self.active:
-                self.request("close", self.id)
-            else:
-                self.request("open", self.id)
+            self.request("set", [self.id], not self.active)
 
     def update(self):
         color = "#ffffff" if self.active else "#000000"
@@ -308,7 +345,7 @@ class Valve(QWidget):
             }}
         """)
 
-    def set_status(self, status: bool):
+    def set_value(self, status: bool):
         if self.active != status:
             self.active = status
             self.update()
@@ -422,71 +459,88 @@ class Switch(QWidget):
         """)
 
 class Schematic(QWidget):
-    def __init__(self, parent, request=None):
+    def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.request = request if request is not None else (lambda *args, **kwargs: None)
-
-        # ----- Grid Layout -----
         self.grid = QGridLayout(self)
+        self.setContentsMargins(20, 20, 20, 20)
+        with open("devices_config.json", "r") as f:
+            self.config = json.load(f)
 
-        # Reactors
-        self.reactor_line_1 = [Reactor(self, i + 1) for i in range(5)]
-        for i, reactor in enumerate(self.reactor_line_1):
-            self.grid.addWidget(reactor, 10, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.reactor_line_2 = [Reactor(self, i + 6) for i in range(5)]
-        for i, reactor in enumerate(self.reactor_line_2):
-            self.grid.addWidget(reactor, 0, 8 - i, alignment=Qt.AlignmentFlag.AlignCenter)
+        # ----- Valves -----
+        self.smc_device = smc.SmcDevNet()
+        self.smc_device.start()
+        self.smc_worker = worker.Worker(self.smc_device, "get", delta_t=0.2)
 
-        # Valves
-        self.valve_line_1 = [Valve(self, i + 1, self.request) for i in range(5)]
-        for i, valve in enumerate(self.valve_line_1):
-            self.grid.addWidget(valve, 9, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.valve_line_2 = [Valve(self, i + 11, self.request) for i in range(5)]
-        for i, valve in enumerate(self.valve_line_2):
-            self.grid.addWidget(valve, 1, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        valves = self.config["Valves"]
+        self.valve_reactors = [Valve(self, id, self.smc_worker.request) for name, id in valves.items() if "Reactor" in name]
+        self.valve_lines = [Valve(self, id, self.smc_worker.request) for name, id in valves.items() if "Line" in name]
+        self.valve_vacuum = Valve(self, valves["Vacuum"], self.smc_worker.request)
+        self.valve_trap = Valve(self, valves["Trap"], self.smc_worker.request)
+        self.valve_h2 = Valve(self, valves["H2"], self.smc_worker.request)
+        self.valve_lift = Valve(self, valves["Lift"], self.smc_worker.request)
+        self.valves = self.valve_reactors + self.valve_lines + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_lift]
 
-        self.valve_gate_1 = Valve(self, 6, self.request)
-        self.grid.addWidget(self.valve_gate_1, 7, 4, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.valve_gate_2 = Valve(self, 10, self.request)
-        self.grid.addWidget(self.valve_gate_2, 3, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.smc_worker.update.connect(lambda values: self.update(self.valves, values))
+        self.smc_worker.start()
 
-        self.valve_vacuum = Valve(self, 7, self.request)
-        self.grid.addWidget(self.valve_vacuum, 6, 5, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.valve_trap = Valve(self, 8, self.request)
-        self.grid.addWidget(self.valve_trap, 5, 3, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.valve_h2 = Valve(self, 9, self.request)
-        self.grid.addWidget(self.valve_h2, 4, 5, alignment=Qt.AlignmentFlag.AlignCenter)
+        for i, v in enumerate(self.valve_reactors[:5]):
+            self.grid.addWidget(v, 9, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        for i, v in enumerate(self.valve_reactors[5:10]):
+            self.grid.addWidget(v, 1, 8 - i, alignment=Qt.AlignmentFlag.AlignCenter) 
+        self.grid.addWidget(self.valve_lines[0], 7, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.valve_lines[1], 3, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.valve_vacuum, 6, 4, alignment=Qt.AlignmentFlag.AlignRight)
+        self.grid.addWidget(self.valve_trap, 5, 4, alignment=Qt.AlignmentFlag.AlignLeft)
+        self.grid.addWidget(self.valve_h2, 4, 4, alignment=Qt.AlignmentFlag.AlignRight)
 
-        # Heaters
-        self.ovens = [Oven(self, i + 1) for i in range(2)]
+        # ----- Reactors -----
+        self.reactors = [Reactor(self, id) for _, id in self.config["Reactors"].items()]
+
+        self.keller_device = keller.Keller()
+        self.keller_worker = worker.Worker(self.keller_device, "get", [r.id for r in self.reactors], 0.1)
+        self.keller_worker.update.connect(lambda values: self.update(self.reactors, values))
+        self.keller_worker.start()
+
+        for i, r in enumerate(self.reactors[:5]):
+            self.grid.addWidget(r, 10, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        for i, r in enumerate(self.reactors[5:]):
+            self.grid.addWidget(r, 0, 8 - i, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # ----- Heaters -----
+        heaters = self.config["Heaters"]
+        self.trap = Trap(self, heaters["Trap"])
+        self.ovens = [Oven(self, id) for name, id in heaters.items() if "Oven" in name]
+        self.heaters = [self.trap] + self.ovens
+
+        self.tm_device = tm.TMHardware()
+        self.tm_worker = worker.Worker(self.tm_device, "get", [h.id for h in self.heaters], 1.0)
+        self.tm_worker.update.connect(lambda values: self.update(self.heaters, values))
+        self.tm_worker.start()
+
         self.grid.addWidget(self.ovens[0], 7, 8, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.ovens[1], 3, 8, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.trap = Trap(self, 1)
         self.grid.addWidget(self.trap, 4, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Peltiers
-        self.peltiers = [Peltier(self, i + 1) for i in range(2)]
+        # ----- Coolers ----- 
+        self.peltiers = [Peltier(self, id) for _, id in self.config["Coolers"].items()]
+
         self.grid.addWidget(self.peltiers[0], 7, 7, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.peltiers[1], 3, 7, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Symbols
+        # ----- Symbols -----
         self.h2 = H2(self)
-        self.grid.addWidget(self.h2, 4, 6, alignment=Qt.AlignmentFlag.AlignCenter)
         self.vacuum = Vacuum(self)
-        self.grid.addWidget(self.vacuum, 6, 6, alignment=Qt.AlignmentFlag.AlignCenter)
         self.switch = Switch(self)
+
+        self.grid.addWidget(self.h2, 4, 5, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.vacuum, 6, 5, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.switch, 6, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ----- Collections -----
-        self.heaters = [self.trap] + self.ovens
-        self.reactors = self.reactor_line_1 + self.reactor_line_2
-        self.valves = self.valve_line_1 \
-            + [self.valve_gate_1, self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_gate_2] \
-            + self.valve_line_2
-
-    def get_active_reactors(self):
-        return [r for r in self.reactors if r and r.active]
+    def update(self, objects, values):
+        for obj in objects:
+            if obj.id <= len(values):
+                obj.set_value(values[obj.id - 1])
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -507,9 +561,9 @@ class Schematic(QWidget):
 
         # Left Line
         painter.drawLine(self.grid.cellRect(2, 4).center(), self.grid.cellRect(8, 4).center())
-        painter.drawLine(self.grid.cellRect(4, 4).center(), self.grid.cellRect(4, 6).center())
+        painter.drawLine(self.grid.cellRect(4, 4).center(), self.grid.cellRect(4, 5).center())
         painter.drawLine(self.grid.cellRect(5, 2).center(), self.grid.cellRect(5, 4).center())
-        painter.drawLine(self.grid.cellRect(6, 4).center(), self.grid.cellRect(6, 6).center())
+        painter.drawLine(self.grid.cellRect(6, 4).center(), self.grid.cellRect(6, 5).center())
 
         # Trap Switch Loop
         painter.drawLine(self.grid.cellRect(4, 2).center(), self.grid.cellRect(6, 2).center())
@@ -517,11 +571,17 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(4, 0).center(), self.grid.cellRect(4, 2).center())
         painter.drawLine(self.grid.cellRect(6, 0).center(), self.grid.cellRect(6, 2).center())
 
+    def closeEvent(self, event):
+        self.keller_worker.stop()
+        self.tm_worker.stop()
+        self.smc_worker.stop()
+        self.smc_device.stop()
+        event.accept()
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    window = QWidget()
-    reactor = Schematic(parent=window)
+    window = Schematic(parent=None)
 
     window.show()
     sys.exit(app.exec())

@@ -1,0 +1,42 @@
+{
+  "Valves": {
+    "Reactor 1": 1,
+    "Reactor 2": 2,
+    "Reactor 3": 3,
+    "Reactor 4": 4,
+    "Reactor 5": 5,
+    "Reactor 6": 15,
+    "Reactor 7": 14,
+    "Reactor 8": 13,
+    "Reactor 9": 12,
+    "Reactor 10": 11,
+    "Line 1": 6,
+    "Line 2": 10,
+    "Vacuum": 7,
+    "Trap": 8,
+    "H2": 9,
+    "Vortex": 17,
+    "Lift": 19
+  },
+  "Heaters": {
+    "Trap": 1,
+    "Oven 1": 2,
+    "Oven 2": 3
+  },
+  "Coolers": {
+    "Peltier 1": 1,
+    "Peltier 2": 2
+  },
+  "Reactors": {
+    "Reactor 1": 1,
+    "Reactor 2": 2,
+    "Reactor 3": 3,
+    "Reactor 4": 4,
+    "Reactor 5": 5,
+    "Reactor 6": 6,
+    "Reactor 7": 7,
+    "Reactor 8": 8,
+    "Reactor 9": 9,
+    "Reactor 10": 10
+  }
+}

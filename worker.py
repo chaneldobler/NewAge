@@ -5,31 +5,32 @@ from PySide6.QtCore import QThread, Signal
 class Worker(QThread):
     update = Signal(list)
     
-    def __init__(self, device, poll_method_name=None, interval=0.2):
+    def __init__(self, object, get=None, idx=None, delta_t=0.2):
         super().__init__()
-        self.device = device
-        self.poll_method_name = poll_method_name
+        self.object = object
+        self.get = get
+        self.idx = idx
         self.cache = None 
-        self.requests = queue.Queue() # Thread-safe FIFO queue
+        self.requests = queue.Queue()
         self.running = True
-        self.interval = interval
+        self.delta_t = delta_t
 
     def run(self):
         while self.running:
-            # Process any pending requests 
+            # Set
             while not self.requests.empty():
-                method_name, args = self.requests.get()
-                if hasattr(self.device, method_name):
-                    method = getattr(self.device, method_name)
-                    method(*args)
+                func, args = self.requests.get()
+                if hasattr(self.object, func):
+                    set = getattr(self.object, func)
+                    set(*args)
             
-            # Update values
-            if self.poll_method_name and hasattr(self.device, self.poll_method_name):
-                poll_method = getattr(self.device, self.poll_method_name)
-                self.cache = poll_method()
+            # Get
+            if self.get and hasattr(self.object, self.get):
+                get = getattr(self.object, self.get)
+                self.cache = get(self.idx) if self.idx is not None else get()
                 self.update.emit(self.cache)
 
-            time.sleep(self.interval)
+            time.sleep(self.delta_t)
 
     def request(self, func, *args):
         self.requests.put((func, args))

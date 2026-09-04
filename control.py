@@ -2,7 +2,7 @@ import sys
 import os
 import json
 from PySide6 import QtWidgets,QtCore
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout, QHBoxLayout
 from PySide6.QtCore import QSize, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QPolygonF, QBrush
 import pyqtgraph as pg
@@ -54,12 +54,13 @@ class History(QWidget):
 
     def update(self, values):
         # History
-        for i, val in enumerate(values):
-            if i < len(self.pressures):
-                p = self.pressures[i]
-                if not p.active or val is None:
+        for p in self.pressures:
+            if p.id <= len(values):
+                if not p.active or values[p.id - 1] is None:
                     val = float('nan')
-                self.history[i].append(val)
+                else: 
+                    val = values[p.id - 1]
+                self.history[p.id - 1].append(val)
 
         # Graph
         for i, curve in enumerate(self.curves):
@@ -71,65 +72,25 @@ class Control(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        # ----- Devices and Workers -----
-        # SMC
-        self.smc_device = smc.SmcDevNet()
-        self.smc_device.start()
-        self.smc_worker = worker.Worker(self.smc_device, "get_status_all", 0.1)
-        self.smc_worker.update.connect(self.valve_update)
-        self.smc_worker.start()
-
-        # Keller
-        self.keller_device = keller.Keller()
-        self.keller_worker = worker.Worker(self.keller_device, "get_pressure_all", 0.1)
-        self.keller_worker.update.connect(self.pressure_update)
-        self.keller_worker.start()
-
-        # TM
-        self.tm_device = tm.TMHardware()
-        self.tm_worker = worker.Worker(self.tm_device, "get_temperature_all", 0.1)
-        self.tm_worker.update.connect(self.temperature_update)
-        self.tm_worker.start()
-
-        # ----- Grid -----
-        self.grid = QGridLayout(self)
+        self.container = QHBoxLayout(self)
 
         # Schematic
-        self.schematic = schematic.Schematic(self, self.smc_worker.request)
-        self.grid.addWidget(self.schematic, 0, 0)
+        self.schematic = schematic.Schematic(self)
+        self.container.addWidget(self.schematic)
 
         # Graph
         self.graph = History(self, self.schematic.reactors)
-        self.grid.addWidget(self.graph, 0, 1)
-
-    def valve_update(self, values):
-        for i, val in enumerate(values):
-            if i < len(self.schematic.valves):
-                self.schematic.valves[i].set_status(val)
-
-    def pressure_update(self, values):
-        for i, val in enumerate(values):
-            if i < len(self.schematic.reactors):
-                self.schematic.reactors[i].set_value(val)
-        self.graph.update(values)
-
-    def temperature_update(self, values):
-        for i, val in enumerate(values):
-            if i < len(self.schematic.heaters):
-                self.schematic.heaters[i].set_value(val)
+        self.schematic.keller_worker.update.connect(self.graph.update)
+        self.container.addWidget(self.graph)
             
     def closeEvent(self, event):
-        self.keller_worker.stop()
-        self.tm_worker.stop()
-        self.smc_worker.stop()
-        self.smc_device.stop()
+        self.schematic.closeEvent(event)
         event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    window = QWidget()
-    control = Control(parent=window)
+    window = Control(parent=None)
 
     window.show()
     sys.exit(app.exec())

@@ -23,6 +23,10 @@ class UI(QMainWindow):
         self.control = control.Control(self)
 
         self.tabs.addTab(self.control, "Control")
+        
+    def closeEvent(self, event):
+        self.control.closeEvent(event)
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

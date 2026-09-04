@@ -2,6 +2,7 @@ import can
 import subprocess
 import time
 import json
+import numpy as np
 
 # the connection times out pretty quickly. try to re-establish a connection if communication failed.
 
@@ -12,35 +13,16 @@ class SmcDevNet:
     bus = None
 
     def __init__(self):
-        # read config
-        with open("smc_config.json", "r") as f:
-            self.config = json.load(f)
-
         # DIP switches 3 to 4 (default 125k baud)
-        self.bitrate = self.config["devicenet"]["bitrate"]
+        self.bitrate = 125000
 
         # DIP switches 5 to 10 (default 63)
-        self.smc_id = self.config["devicenet"]["smc_id"] << 3
+        self.smc_id = 63 << 3
 
-        # subject to configuration
-        self.pi_id = self.config["devicenet"]["pi_id"] << 3
+        # Subject to configuration
+        self.pi_id = 0 << 3
 
-        # store IDs
-        self.reactors = [valve["id"] for valve in self.config["valves"]["reactors"]]
-        self.lines = [valve["id"] for valve in self.config["valves"]["lines"]]
-        self.h2 = [valve["id"] for valve in self.config["valves"]["h2"]]
-        self.vacuum = [valve["id"] for valve in self.config["valves"]["vacuum"]]
-        self.trap = [valve["id"] for valve in self.config["valves"]["trap"]]
-
-    # transform a set of indices to a bitmask
-    def to_mask(self, idx):
-        return list(sum(1 << (i - 1) for i in idx).to_bytes(3, byteorder='little'))
-
-    # transform a bitmask to a list
-    def to_list(self, mask):
-        mask_int = int.from_bytes(mask, byteorder='little')
-        return [(mask_int >> i) & 1 for i in range(19)]
-
+    # ----- Internal -----
     def ip_link_up(self):
         try:
             subprocess.run(['sudo', 'ip', 'link', 'set', 'can0', 'up', 'type', 'can', 'bitrate', f'{self.bitrate}'], check=True)
@@ -115,41 +97,13 @@ class SmcDevNet:
         reply = self.send_message(cid, data)
 
         return reply.data[2]
-        
-    def get_status_all(self):
-        # Group, Destination, Transmit message across explicit connection
-        cid = self.gr_2_id | self.smc_id | 4
-
-        # [Source MAC ID, Get_Attribute_Single, Class, Instance, Attribute]
-        data = [self.pi_id, 0x0E, 0x04, 0x25, 0x03]
-
-        reply = self.send_message(cid, data)
-
-        return self.to_list(reply.data[2:])
-                 
+             
     def open(self, id):
         # Group, Destination, Transmit message across explicit connection
         cid = self.gr_2_id | self.smc_id | 4
 
         # [Source MAC ID, Set_Attribute_Single, Class, Instance, Attribute, Value]
         data = [self.pi_id, 0x10, 0x09, id, 0x03, 0x01]
-
-        self.send_message(cid, data)
-
-    def open_multiple(self, idx):
-        # Group, Destination, Transmit message across explicit connection
-        cid = self.gr_2_id | self.smc_id | 4
-
-        status = self.get_status_all()
-        current = sum(bit << i for i, bit in enumerate(status))
-        
-        additional = int.from_bytes(self.to_mask(idx), byteorder='little')
-        
-        mask = current | additional
-        payload = list(mask.to_bytes(3, byteorder='little'))
-
-        # [Source MAC ID, Set_Attribute_Single, Class, Instance, Attribute, 3 Value Bytes]
-        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + payload
 
         self.send_message(cid, data)
 
@@ -171,23 +125,6 @@ class SmcDevNet:
 
         self.send_message(cid, data)
 
-    def close_multiple(self, idx):
-        # Group, Destination, Transmit message across explicit connection
-        cid = self.gr_2_id | self.smc_id | 4
-
-        status = self.get_status_all()
-        current = sum(bit << i for i, bit in enumerate(status))
-        
-        additional = int.from_bytes(self.to_mask(idx), byteorder='little')
-        
-        mask = current & ~additional
-        payload = list(mask.to_bytes(3, byteorder='little'))
-
-        # [Source MAC ID, Set_Attribute_Single, Class, Instance, Attribute, 3 Value Bytes]
-        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + payload
-
-        self.send_message(cid, data)
-
     def close_all(self):
         # Group, Destination, Transmit message across explicit connection
         cid = self.gr_2_id | self.smc_id | 4
@@ -197,6 +134,32 @@ class SmcDevNet:
 
         self.send_message(cid, data)
 
+    # ----- External -----
+    def get(self):
+        # Group, Destination, Transmit message across explicit connection
+        cid = self.gr_2_id | self.smc_id | 4
+
+        # [Source MAC ID, Get_Attribute_Single, Class, Instance, Attribute]
+        data = [self.pi_id, 0x0E, 0x04, 0x25, 0x03]
+
+        reply = self.send_message(cid, data)
+
+        return [(int.from_bytes(reply.data[2:], byteorder='little') >> i) & 1 for i in range(19)]
+
+    def set(self, idx, value):
+        # Group, Destination, Transmit message across explicit connection
+        cid = self.gr_2_id | self.smc_id | 4
+
+        status = self.get()
+        for i in idx:
+            if i <= len(status):
+                status[i - 1] = value
+
+        # [Source MAC ID, Set_Attribute_Single, Class, Instance, Attribute, 3 Value Bytes]
+        data = [self.pi_id, 0x10, 0x04, 0x25, 0x03] + np.packbits(status, bitorder="little").tolist()
+
+        self.send_message(cid, data)
+    
     def start(self):
         try:
             self.ip_link_down()
@@ -226,11 +189,10 @@ class SmcDevNet:
 if __name__ == "__main__":
     smc = SmcDevNet()
     smc.start()
-    smc.open(2)
     time.sleep(1)
-    smc.open_multiple([1, 3])
+    smc.set([1,2,3,19], 1)
+    print(smc.get())
     time.sleep(1)
-    smc.close_multiple([1, 4])
-    print(smc.get_status_all())
+    smc.set([1,2,3,19], 0)
     time.sleep(1)
     smc.stop()
