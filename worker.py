@@ -25,7 +25,7 @@ class Worker(QThread):
                     set(*args)
             
             # Get
-            if self.get and hasattr(self.object, self.get):
+            if self.get is not None and hasattr(self.object, self.get):
                 get = getattr(self.object, self.get)
                 self.cache = get(self.idx) if self.idx is not None else get()
                 self.update.emit(self.cache)

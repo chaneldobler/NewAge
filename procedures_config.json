@@ -1,0 +1,16 @@
+{
+  "conditioning": {
+    "iron oxidation": {
+      "oven conditioning temperature": 500,
+      "iron preheating duration": 300
+    },
+    "leak test": {
+      "leak test duration": 300,
+      "leak test limit": 0.006
+    },
+    "h2 clean": {
+      "h2 cycle repetitions": 1,
+      "h2 cycle duration": 300
+    } 
+  }
+}

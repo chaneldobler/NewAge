@@ -8,8 +8,9 @@ import numpy as np
 # send requesst to just request
 
 class Procedures:
-    def __init__(self, schematic):
-        self.schematic = schematic
+    def __init__(self, parent):
+        self.parent = parent
+        self.schematic = self.parent.schematic
 
         # Device Communication
         self.keller_request = self.schematic.keller_worker.request
@@ -19,7 +20,7 @@ class Procedures:
         self.reset()
 
     def reset(self):
-        with open("conditioning_config.json", "r") as f:
+        with open("procedures_config.json", "r") as f:
             self.config = json.load(f)
 
         # Valves
@@ -28,6 +29,7 @@ class Procedures:
         self.valve_vacuum = self.schematic.valve_vacuum
         self.valve_trap = self.schematic.valve_trap
         self.valve_h2 = self.schematic.valve_h2
+        self.valve_vortex = self.schematic.valve_vortex
         self.valve_lift = self.schematic.valve_lift
 
         # Reactors
@@ -41,40 +43,53 @@ class Procedures:
         self.peltiers = self.schematic.peltiers
 
     def update(self):
-        with open("conditioning_config.json", "r") as f:
+        with open("procedures_config.json", "r") as f:
             self.config = json.load(f)
 
         self.reactors = [r for r in self.schematic.reactors if r.active]
 
+        # Close Both
+        if not self.reactors:
+            self.ovens = []
+            self.peltiers = []
+            self.valve_lines = []
+
         # Close Line 1
-        if all(id not in range(5) for id in self.reactors):
-            self.ovens = self.schematic.ovens[1]
-            self.peltiers = self.schematic.peltiers[1]
-            self.lines = self.schematic.valve_lines[1]
-
+        elif all(6 <= r.id <= 10 for r in self.reactors):
+            self.ovens = [self.schematic.ovens[1]]
+            self.peltiers = [self.schematic.peltiers[1]]
+            self.valve_lines = [self.schematic.valve_lines[1]]
+            self.schematic.ovens[0].set_active(False)
+            self.schematic.peltiers[0].set_active(False)
+            
         # Close Line 2
-        if all(id not in range(5, 10) for id in self.reactors):
-            self.ovens = self.schematic.ovens[0]
-            self.peltiers = self.schematic.peltiers[0]
-            self.lines = self.schematic.valve_lines[0]
-        idx = [r.id for r in self.reactors if r.id <= 5] + [21 - r.id for r in self.reactors if r.id > 5]
+        elif all(1 <= r.id <= 5 for r in self.reactors):
+            self.ovens = [self.schematic.ovens[0]]
+            self.peltiers = [self.schematic.peltiers[0]]
+            self.valve_lines = [self.schematic.valve_lines[0]]
+            self.schematic.ovens[1].set_active(False)
+            self.schematic.peltiers[1].set_active(False)
 
+        idx = [r.id for r in self.reactors if r.id <= 5] + [21 - r.id for r in self.reactors if r.id > 5]
         self.valve_reactors = [v for v in self.schematic.valves if v.id in idx]
 
+    # ----- Conditioning -----
     def oxidise_iron(self):
-        self.update()
-        cfg = self.config["iron_oxidation"]
+        cfg = self.config["conditioning"]["iron oxidation"]
+        temperature = cfg["oven conditioning temperature"]
+        duration = cfg["iron preheating duration"]
 
         # Pressure Check
-        if any(r.value is not None and r.value < cfg["threshold_pressure"] for r in self.reactors):
-            print("Error: Pressure below threshold. Oxidation process stopped.")
+        if any(r.value is not None and r.value < 0.8 for r in self.reactors):
+            print("Error: Pressure below threshold. Iron oxidation process stopped.")
             return False
 
         # Set and Run Ovens
-        if cfg["conditioning_oven_temperature"] > 650:
-            print("Error: Conditioning temperature unsafe. Oxidation process stopped.")
+        if temperature > 650:
+            print("Error: Conditioning temperature unsafe. Iron oxidation process stopped.")
+            return False
         for o in self.ovens:
-            self.tm_request("set_temperature", o.id, cfg["conditioning_oven_temperature"])
+            self.tm_request("set_temperature", o.id, temperature)
             self.tm_request("run", o.id)
             o.set_running(True)
 
@@ -95,116 +110,133 @@ class Procedures:
         time.sleep(1.0)
 
         # Heat Ovens
-        start_time = time.time()
-        while not all(o.value is not None and o.value > cfg["conditioning_oven_temperature"] for o in self.ovens):
+        while any(o.value is not None and o.value < temperature for o in self.ovens):
             time.sleep(1.0)
-            if time.time() - start_time > 100:
-                return
+            if not self.parent.running:
+                return False
 
-        # Lift
+        # Lift Samples
         self.smc_request(
             "set",
-            [self.valve_lift.id]
+            [self.valve_lift.id],
+            1
         )
-        time.sleep(cfg["preheat_iron_duration"])
+
+        end_time = time.time() + duration
+        while time.time() < end_time:
+            time.sleep(1)
+            # interrupt
 
     def get_average_pressure(self):
-        pressures = []
+        pressures = [] * len(self.reactors)
         start_time = time.time()
         while time.time() - start_time < 10:
-            pressures.append(self.keller_worker.cache)
-            time.sleep(0.1)
-        return np.mean(pressures, axis=0)
+            for i, p in enumerate(self.reactors):
+                if p.value is not None:
+                    pressures[i] += p.value / 10
+                else:
+                    pressures[i] = None
+            time.sleep(1)
+        return pressures
 
     def leak_test(self):
-        # read config
-        with open("conditioning_config.json", "r") as f:
-            config = json.load(f)
-        cfg = config["leak_test"]
-        test_duration = cfg["test_duration"]
-        difference_limit = cfg["difference_limit"]
+        cfg = self.config["conditioning"]["leak test"]
+        duration = cfg["leak test duration"]
+        limit = cfg["leak test limit"]
 
-        # open valves
-        self.smc_worker.send_request(
-            "open_multiple",
-            self.smc.reactors
-            + self.smc.lines
-            + self.smc.vacuum
+        # Open Valves
+        self.smc_request(
+            "set",
+            self.valve_reactors
+            + self.valve_lines
+            + self.valve_vacuum,
+            1
         )
 
         time.sleep(180)
 
-        # close valves
-        self.smc_worker.send_request(
-            "close_multiple",
-            self.smc.reactors
+        # Close Valves
+        self.smc_request(
+            "set",
+            self.valve_reactors,
+            0
         )
 
-        # get pressure difference
+        # Pressure Difference
         pressure_before = self.get_average_pressure()
-        time.sleep(test_duration)
+        time.sleep(duration)
         pressure_after = self.get_average_pressure()  
-        pressure_diff = np.subtract(pressure_after, pressure_before).tolist() # fix for nones
-        if not all(p < difference_limit for p in pressure_diff):
+        pressure_difference = [
+            abs(pressure_after[i] - pressure_before[i]) \
+            if pressure_after[i] is not None and pressure_before[i] is not None \
+            else None for i in range(len(pressure_before))
+        ] 
+        if any(p is not None and p > limit for p in pressure_difference):
             print("Leak test failed.") # prompt user for retry ...
 
-    def h2_clean(self):
-        # read config
-        with open("conditioning_config.json", "r") as f:
-            config = json.load(f)
-        cfg = config["h2_clean"]
-        num_cycles = cfg["number_of_cycles"]
-        threshold_pressure = cfg["threshold_pressure"]
-        clean_duration = cfg["clean_duration"]
-        
-        for _ in range(num_cycles):
-            # set valves
-            self.smc_worker.send_request("close_multiple", self.smc.vacuum)
-            self.smc_worker.send_request("open_multiple", self.smc.h2)
-
-            # wait for reactors to reach pressure
-            pressures = self.smc_worker.cache
-            while not any(p > threshold_pressure for p in pressures):
-                time.sleep(1.0)
-                pressures = self.smc_worker.cache
-
-            # set valves
-            self.smc_worker.send_request("close_multiple", self.smc.h2)
-            time.sleep(clean_duration)
-            self.smc_worker.send_request("close_multiple", self.smc.vacuum)
-            time.sleep(60)
-
-    def offset_correction(self):
-        self.smc_worker.send_request(
-            "open_multiple",
-            self.smc.reactors 
-            + self.smc.lines
-            + self.smc.vac
-            )
+    def correct_offset(self):
+        # Open Valves
+        self.smc_request(
+            "set",
+            self.valve_reactors 
+            + self.valve_lines
+            + self.valve_vacuum,
+            1
+        )
 
         time.sleep(20)
 
-        return self.get_average_pressure() # what do i do with this? 
+        # Set Offset
+        avg = self.get_average_pressure()
+        for i, r in self.reactors:
+            if i < len(avg):
+                r.offset = avg[i]
+
+    def h2_clean(self):
+        cfg = self.config["conditioning"]["h2 test"]
+        repetitions = cfg["h2 cycle repetitions"]  
+        duration = cfg["h2 cycle duration"]
+        
+        for _ in range(repetitions):
+            # Set Valves
+            self.smc_request("set", self.valve_vacuum, 0)
+            self.smc_request("set", self.valve_h2, 1)
+
+            # Vacuum
+            while all(r.value is not None and r.value < 0.8 for r in self.reactors):
+                time.sleep(1.0)
+                if not self.parent.running:
+                    return False
+
+            # Set Valves
+            self.smc_request("set", self.valve_h2, 0)
+            time.sleep(duration)
+            self.smc_request("set", self.valve_vacuum, 1)
+            time.sleep(60)
 
     def clean_trap(self):
+        self.smc_request("set", self.valve_vacuum, 0)
+        
+        # open switch
+
+        # wait trap clean time 60s
+
+        # close switch
+
         pass
 
-    def clean_alf(self):
-        pass
-
-    def conditioning(self, idx):
-        self.active = idx
-
-        with open("conditioning_config.json", "r") as f:
-            self.config = json.load(f)
-
+    def conditioning(self):
+        self.update()
         self.oxidise_iron()
-        # evacuate reactors ? 
         self.leak_test()
+        self.correct_offset()
         self.h2_clean()
+        self.clean_trap()
 
+    # ----- Sample -----
     def load_trap(self):
-        pass
+        # Vortex Cooler
+        self.smc_request("set", self.valve_vortex, 1)
 
     def load_reactors(self):
         # for reactor in active reactors

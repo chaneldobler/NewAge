@@ -37,20 +37,10 @@ class History(QWidget):
             curve = self.graph.plot(pen=pen, name=f"R{p.id}")
             self.curves.append(curve)
 
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.graph)
-        self.content.setContentsMargins(4, 4, 4, 4)
-
         # Box Container
         self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
+        self.container.addWidget(self.graph)
+        self.setContentsMargins(20, 20, 20, 20)
 
     def update(self, values):
         # History
@@ -67,24 +57,116 @@ class History(QWidget):
             if i < len(self.history):
                 curve.setData(self.history[i])
 
+class Conditioning(QWidget):
+    def __init__(self, parent, request=None, set_running=None):
+        super().__init__(parent)
+        self.parent = parent
+        self.request = request
+        self.set_running = set_running
+
+        # Properties
+        self.running = False
+        self.value = ""
+
+        # Header
+        self.header = QLabel(f"Conditioning", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.header.setStyleSheet(f"""
+            QLabel {{
+                background-color: #acacac;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 8px 16px;
+            }}
+        """)
+
+        # Display 
+        self.display = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display.setStyleSheet(f"""
+            QLabel {{
+                background-color: white;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 8px 8px;
+            }}
+        """)
+
+        # Toggle Button
+        self.button = QPushButton("Start")
+        self.button.clicked.connect(self.request_toggle)
+        self.button.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: #ffffff;
+                border: 1px solid #545b62;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 4px 4px;
+            }
+            QPushButton:hover {
+                background-color: #5c636a;
+            }
+            QPushButton:pressed {
+                background-color: #495057;
+            }
+        """)
+
+        # Box Container
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
+        self.container.addWidget(self.button)
+        self.container.setSpacing(0)
+
+    def request_toggle(self):
+        if self.request is not None:
+            self.request("conditioning") # add parameters
+
+    def set_value(self, val):
+        self.display.setText(val)
 
 class Control(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.container = QHBoxLayout(self)
+        # Properties
+        self.running = False
 
         # Schematic
         self.schematic = schematic.Schematic(self)
-        self.container.addWidget(self.schematic)
 
         # Graph
         self.graph = History(self, self.schematic.reactors)
         self.schematic.keller_worker.update.connect(self.graph.update)
-        self.container.addWidget(self.graph)
-            
+
+        # Procedures
+        self.procedures = procedures.Procedures(self)
+        self.procedures_worker = worker.Worker(self.procedures)
+        self.procedures_worker.start()
+        self.conditioning = Conditioning(self, self.procedures_worker.request)
+        self.loading = Conditioning(self, self.procedures_worker.request)
+        self.reaction = Conditioning(self, self.procedures_worker.request)
+        self.stop = Conditioning(self, self.procedures_worker.request) 
+
+        # Container
+        self.container = QHBoxLayout()
+        self.container.addWidget(self.conditioning)
+        self.container.addWidget(self.loading)
+        self.container.addWidget(self.reaction)
+        self.container.addWidget(self.stop)
+
+        # Grid
+        self.grid = QGridLayout(self)
+        self.grid.addWidget(self.schematic, 0, 0)
+        self.grid.addWidget(self.graph, 0, 1)
+        self.grid.addLayout(self.container, 1, 0)
+        
     def closeEvent(self, event):
         self.schematic.closeEvent(event)
+        self.procedures_worker.stop()
         event.accept()
 
 if __name__ == "__main__":
@@ -92,6 +174,6 @@ if __name__ == "__main__":
 
     window = Control(parent=None)
 
-    window.show()
+    window.show() #showMaximized()
     sys.exit(app.exec())
 

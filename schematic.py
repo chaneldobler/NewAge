@@ -1,6 +1,7 @@
 
 import sys
 import numpy
+import time
 import json
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout
 from PySide6.QtGui import QColor, QPainter, QPen
@@ -19,69 +20,36 @@ class Reactor(QWidget):
         self.id = id
         self.active = True 
         self.value = 0
+        self.offset = 0
 
         # Colored Header
         self.color = QColor.fromHslF(((self.id + 4)/12) % 1, 0.95, 0.45)
         self.header = QLabel(f"Reactor {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Value Display
-        self.display = QLabel("-- mbar", alignment=Qt.AlignmentFlag.AlignRight)
+        self.display = QLabel("-- mbar", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display.setStyleSheet(f"""
+            QLabel {{
+                background-color: white;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 8px 8px;
+            }}
+        """)
 
         # Toggle Button
         self.button = QPushButton("Deactivate")
         self.button.clicked.connect(self.toggle)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.addWidget(self.display)
-        self.content.addWidget(self.button)
-        self.content.setContentsMargins(4, 4, 4, 4)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
-
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
-        self.update()
-
-    def toggle(self):
-        self.active = not self.active
-        self.update()
-
-    def update(self):
-        # Header
-        color = self.color.name() if self.active else "#555555"
-        self.header.setStyleSheet(f"""
-            QLabel {{
-                background-color: {color};
-                color: white;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 8px 4px;
-            }}
-        """)
-        
-        # Button
-        text = "Deactivate" if self.active else "Activate"
-        self.button.setText(text)
         self.button.setStyleSheet("""
             QPushButton {
                 background-color: #6c757d;
-                color: #ffffff;
+                color: white;
                 border: 1px solid #545b62;
                 border-radius: 0px;
-                font-weight: bold;
                 font-size: 12px;
+                padding: 4px 4px;
             }
             QPushButton:hover {
                 background-color: #5c636a;
@@ -91,15 +59,45 @@ class Reactor(QWidget):
             }
         """)
 
+        # Box Container
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
+        self.container.addWidget(self.display)
+        self.container.addWidget(self.button)
+        self.container.setSpacing(0)
+
+        self.update()
+
+    def toggle(self):
+        self.active = not self.active
+        if self.active:
+            self.button.setText("Deactivate")
+        else: 
+            self.button.setText("Activate")
+        self.update()
+
+    def update(self):
+        bg_color = self.color.name() if self.active else "black"
+        self.header.setStyleSheet(f"""
+            QLabel {{
+                background-color: {bg_color};
+                color: white;
+                border: none;
+                border-radius: 0px;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 8px 16px;
+            }}
+        """)
+
     def set_value(self, val: float):
-        self.value = val
         if not self.active:
             self.display.setText("")
         elif val is None:
             self.display.setText("-- mbar")
         else:
-            p = int(val * 1000)
-            self.display.setText(f"{p} mbar")
+            self.display.setText(f"{int((val - self.offset) * 1000)} mbar")
+        self.value = val
 
 class Oven(QWidget):
     def __init__(self, parent, id):
@@ -109,73 +107,84 @@ class Oven(QWidget):
         # Properties
         self.id = id
         self.active = True 
-        self.heating = False
         self.value = 0
+        self.running = False
 
         # Colored Header
         self.color = QColor.fromHslF(0, 0.5, 0.45)
         self.header = QLabel(f"Oven {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Value and Heating Display
-        self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
-        self.running = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignRight)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.addWidget(self.display)
-        self.content.addWidget(self.running)
-        self.content.setContentsMargins(4, 4, 4, 4)
+        # Value Display
+        self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display.setStyleSheet(f"""
+            QLabel {{
+                background-color: white;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 8px 8px;
+            }}
+        """)
+        
+        # Status Display
+        self.status = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.status.setStyleSheet(f"""
+            QLabel {{
+                background-color: #6c757d;
+                color: white;
+                border: 1px solid #6c757d;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 4px 4px;
+            }}
+        """)
 
         # Box Container
         self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
+        self.container.addWidget(self.header)
+        self.container.addWidget(self.display)
+        self.container.addWidget(self.status)
+        self.container.setSpacing(0)
 
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.update()
 
     def update(self):
-        color = self.color.name() if self.active else "#555555"
+        bg_color = self.color.name() if self.active else "black"
         self.header.setStyleSheet(f"""
             QLabel {{
-                background-color: {color};
+                background-color: {bg_color};
                 color: white;
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
                 font-size: 12px;
-                padding: 8px 4px;
+                padding: 8px 16px;
             }}
         """)
 
     def set_value(self, val: float):
-        self.value = val
         if not self.active:
             self.display.setText("")
         elif val is None:
             self.display.setText("-- °C")
         else:
             self.display.setText(f"{val} °C")
+        self.value = val
 
-    def set_status(self, status: bool):
-        if self.active != status:
-            self.active = status
+    def set_active(self, active: bool):
+        if self.active != active:
+            self.active = active
             self.update()
 
-    def set_running(self, status: bool):
-        if self.heating != status:
-            if status is True:
-                self.running.setText("Heating ON")
+    def set_running(self, running: bool):
+        if self.running != running:
+            if running:
+                self.status.setText("Heating ON")
             else:
-                self.running.setText("Heating OFF")
+                self.status.setText("Heating OFF")
+            self.running = running
 
-        
 class Trap(QWidget):
     def __init__(self, parent, id):
         super().__init__(parent)
@@ -183,35 +192,12 @@ class Trap(QWidget):
 
         # Properties
         self.id = id
-        self.heating = False
         self.value = 0
+        self.running = False
 
         # Colored Header
         self.color = QColor.fromHslF(0, 0.5, 0.45)
         self.header = QLabel(f"Trap", alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Value Display
-        self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
-        self.running = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignRight)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.addWidget(self.display)
-        self.content.addWidget(self.running)
-        self.content.setContentsMargins(4, 4, 4, 4)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
-
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.header.setStyleSheet(f"""
             QLabel {{
                 background-color: {self.color.name()};
@@ -220,23 +206,57 @@ class Trap(QWidget):
                 border-radius: 0px;
                 font-weight: bold;
                 font-size: 12px;
-                padding: 8px 4px;
+                padding: 8px 16px;
             }}
         """)
 
+        # Value Display
+        self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display.setStyleSheet(f"""
+            QLabel {{
+                background-color: white;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 8px 8px;
+            }}
+        """)
+
+        # Status Display
+        self.status = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.status.setStyleSheet(f"""
+            QLabel {{
+                background-color: #6c757d;
+                color: white;
+                border: 1px solid #6c757d;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 4px 4px;
+            }}
+        """)
+
+        # Box Container
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
+        self.container.addWidget(self.display)
+        self.container.addWidget(self.status)
+        self.container.setSpacing(0)
+
     def set_value(self, val: float):
-        self.value = val
         if val is None:
             self.display.setText("-- °C")
         else:
             self.display.setText(f"{val} °C")
+        self.value = val
 
-    def set_running(self, status: bool):
-        if self.heating != status:
-            if status is True:
+    def set_running(self, running: bool):
+        if self.running != running:
+            if running:
                 self.running.setText("Heating ON")
             else:
                 self.running.setText("Heating OFF")
+            self.running = running
 
 class Peltier(QWidget):
     def __init__(self, parent, id):
@@ -246,60 +266,60 @@ class Peltier(QWidget):
         # Properties
         self.id = id
         self.active = True 
-        self.cooling = False
+        self.running = False
 
         # Colored Header
         self.color = QColor.fromHslF(0.5, 0.5, 0.45)
         self.header = QLabel(f"Peltier {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Display 
-        self.running = QLabel("Cooling OFF", alignment=Qt.AlignmentFlag.AlignRight)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.addWidget(self.running)
-        self.content.setContentsMargins(4, 4, 4, 4)
+        self.status = QLabel("Cooling OFF", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.status.setStyleSheet(f"""
+            QLabel {{
+                background-color: #6c757d;
+                color: white;
+                border: 1px solid #6c757d;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 4px 4px;
+            }}
+        """)
 
         # Box Container
         self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
+        self.container.addWidget(self.header)
+        self.container.addWidget(self.status)
+        self.container.setSpacing(0)
 
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.update()
 
     def update(self):
-        color = self.color.name() if self.active else "#555555"
+        bg_color = self.color.name() if self.active else "black"
         self.header.setStyleSheet(f"""
             QLabel {{
-                background-color: {color};
+                background-color: {bg_color};
                 color: white;
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
                 font-size: 12px;
-                padding: 8px 4px;
+                padding: 8px 16px;
             }}
         """)
 
-    def set_status(self, status: bool):
-        if self.active != status:
-            self.active = status
+    def set_active(self, active: bool):
+        if self.active != active:
+            self.active = active
             self.update()
 
-    def set_running(self, status: bool):
-        if self.cooling != status:
-            if status is True:
+    def set_running(self, running: bool):
+        if self.running != running:
+            if running:
                 self.running.setText("Cooling ON")
             else:
                 self.running.setText("Cooling OFF")
-
+            self.running = running
+            
 class Valve(QWidget):
     def __init__(self, parent, id, request=None):
         super().__init__(parent)
@@ -313,13 +333,12 @@ class Valve(QWidget):
         # Toggle Button
         self.button = QPushButton(f"{self.id}")
         self.button.clicked.connect(self.request_toggle)
-        self.button.setFixedSize(20, 20)
+        self.button.setFixedSize(24, 24)
 
         # Button Container
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.button)
 
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.update()
 
     def request_toggle(self):
@@ -327,13 +346,13 @@ class Valve(QWidget):
             self.request("set", [self.id], not self.active)
 
     def update(self):
-        color = "#ffffff" if self.active else "#000000"
+        color = "white" if self.active else "black"
         self.button.setStyleSheet(f"""
             QPushButton {{
                 background-color: {color};
-                color: #bcbcbc;
-                border: 1px solid #545b62;
-                border-radius: 10px;
+                color: #acacac;
+                border: none;
+                border-radius: 12px;
                 font-weight: bold;
                 font-size: 12px;
             }}
@@ -345,9 +364,9 @@ class Valve(QWidget):
             }}
         """)
 
-    def set_value(self, status: bool):
-        if self.active != status:
-            self.active = status
+    def set_value(self, active: bool):
+        if self.active != active:
+            self.active = active
             self.update()
 
 class H2(QWidget):
@@ -357,23 +376,6 @@ class H2(QWidget):
 
         # Colored Header
         self.header = QLabel(f"H2", alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.setContentsMargins(4, 4, 4, 4)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
-
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.header.setStyleSheet(f"""
             QLabel {{
                 background-color: #555555;
@@ -382,9 +384,13 @@ class H2(QWidget):
                 border-radius: 0px;
                 font-weight: bold;
                 font-size: 12px;
-                padding: 8px 4px;
+                padding: 8px 16px;
             }}
         """)
+
+        # Box Container
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
 
 class Vacuum(QWidget):
     def __init__(self, parent):
@@ -393,23 +399,6 @@ class Vacuum(QWidget):
 
         # Colored Header
         self.header = QLabel(f"Vacuum", alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.setContentsMargins(4, 4, 4, 4)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
-
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.header.setStyleSheet(f"""
             QLabel {{
                 background-color: #555555;
@@ -418,9 +407,13 @@ class Vacuum(QWidget):
                 border-radius: 0px;
                 font-weight: bold;
                 font-size: 12px;
-                padding: 8px 4px;
+                padding: 8px 16px;
             }}
         """)
+
+        # Box Container
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
 
 class Switch(QWidget):
     def __init__(self, parent):
@@ -429,23 +422,6 @@ class Switch(QWidget):
 
         # Colored Header
         self.header = QLabel(f"Switch", alignment=Qt.AlignmentFlag.AlignCenter)
-
-        # Box Frame
-        self.frame = QFrame(self)
-        self.frame.setStyleSheet("QFrame { background-color: #ffffff; }")
-        self.frame.setFrameShape(QFrame.Shape.Box)
-        self.frame.setLineWidth(2)
-
-        # Box Content
-        self.content = QVBoxLayout(self.frame)
-        self.content.addWidget(self.header)
-        self.content.setContentsMargins(4, 4, 4, 4)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.frame)
-
-        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         self.header.setStyleSheet(f"""
             QLabel {{
                 background-color: #555555;
@@ -457,6 +433,10 @@ class Switch(QWidget):
                 padding: 8px 4px;
             }}
         """)
+
+        # Box Container
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
 
 class Schematic(QWidget):
     def __init__(self, parent):
@@ -478,8 +458,12 @@ class Schematic(QWidget):
         self.valve_vacuum = Valve(self, valves["Vacuum"], self.smc_worker.request)
         self.valve_trap = Valve(self, valves["Trap"], self.smc_worker.request)
         self.valve_h2 = Valve(self, valves["H2"], self.smc_worker.request)
+        self.valve_vortex = Valve(self, valves["Vortex"], self.smc_worker.request)
+        self.valve_vortex.hide()
         self.valve_lift = Valve(self, valves["Lift"], self.smc_worker.request)
-        self.valves = self.valve_reactors + self.valve_lines + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_lift]
+        self.valve_lift.hide()
+        self.valves = self.valve_reactors + self.valve_lines \
+            + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_lift]
 
         self.smc_worker.update.connect(lambda values: self.update(self.valves, values))
         self.smc_worker.start()
@@ -572,10 +556,21 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(6, 0).center(), self.grid.cellRect(6, 2).center())
 
     def closeEvent(self, event):
+        # Keller
         self.keller_worker.stop()
+
+        # TM
+        self.tm_worker.request("stop", [h.id for h in self.heaters])
+        time.sleep(1)
         self.tm_worker.stop()
+
+        # Stop Peltiers
+
+        # SMC
         self.smc_worker.stop()
         self.smc_device.stop()
+
+        # Propagate
         event.accept()
 
 if __name__ == "__main__":
