@@ -555,13 +555,20 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(4, 0).center(), self.grid.cellRect(4, 2).center())
         painter.drawLine(self.grid.cellRect(6, 0).center(), self.grid.cellRect(6, 2).center())
 
+    def stop(self):
+        for h in self.heaters:
+            self.tm_worker.request("halt", h.id)
+            h.set_running(False)
+
+        self.smc_worker.request("close_all")
+
     def closeEvent(self, event):
         # Keller
         self.keller_worker.stop()
 
         # TM
         self.tm_worker.request("stop", [h.id for h in self.heaters])
-        time.sleep(1)
+        time.sleep(0.1)
         self.tm_worker.stop()
 
         # Stop Peltiers

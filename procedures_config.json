@@ -12,5 +12,14 @@
       "h2 cycle repetitions": 1,
       "h2 cycle duration": 300
     } 
-  }
+  },
+  "reacting": {
+    "reaction": {
+      "reaction duration": 120,
+      "end pressure limit": 0.18
+    },
+    "remove water": {
+      "water removal duration": 420
+    }
+  } 
 }

@@ -73,8 +73,12 @@ class Procedures:
         idx = [r.id for r in self.reactors if r.id <= 5] + [21 - r.id for r in self.reactors if r.id > 5]
         self.valve_reactors = [v for v in self.schematic.valves if v.id in idx]
 
+        return True
+
     # ----- Conditioning -----
     def oxidise_iron(self):
+        print("oxidize iron")
+
         cfg = self.config["conditioning"]["iron oxidation"]
         temperature = cfg["oven conditioning temperature"]
         duration = cfg["iron preheating duration"]
@@ -111,9 +115,9 @@ class Procedures:
 
         # Heat Ovens
         while any(o.value is not None and o.value < temperature for o in self.ovens):
-            time.sleep(1.0)
             if not self.parent.running:
                 return False
+            time.sleep(1.0)
 
         # Lift Samples
         self.smc_request(
@@ -124,13 +128,18 @@ class Procedures:
 
         end_time = time.time() + duration
         while time.time() < end_time:
+            if not self.parent.running:
+                return False
             time.sleep(1)
-            # interrupt
+
+        return True
 
     def get_average_pressure(self):
-        pressures = [] * len(self.reactors)
-        start_time = time.time()
-        while time.time() - start_time < 10:
+        pressures = [0.0] * len(self.reactors)
+        end_time = time.time() + 10
+        while time.time() < end_time:
+            if not self.parent.running:
+                raise RuntimeError("Procedure aborted by user")
             for i, p in enumerate(self.reactors):
                 if p.value is not None:
                     pressures[i] += p.value / 10
@@ -140,6 +149,8 @@ class Procedures:
         return pressures
 
     def leak_test(self):
+        print("leak test")
+
         cfg = self.config["conditioning"]["leak test"]
         duration = cfg["leak test duration"]
         limit = cfg["leak test limit"]
@@ -147,75 +158,115 @@ class Procedures:
         # Open Valves
         self.smc_request(
             "set",
-            self.valve_reactors
-            + self.valve_lines
-            + self.valve_vacuum,
+            [v.id for v in self.valve_reactors]
+            + [v.id for v in self.valve_lines]
+            + [self.valve_vacuum.id],
             1
         )
 
-        time.sleep(180)
+        end_time = time.time() + 180
+        while time.time() < end_time:
+            if not self.parent.running:
+                return False
+            time.sleep(1)
 
         # Close Valves
         self.smc_request(
             "set",
-            self.valve_reactors,
+            [v.id for v in self.valve_reactors],
             0
         )
 
         # Pressure Difference
         pressure_before = self.get_average_pressure()
-        time.sleep(duration)
+
+        end_time = time.time() + duration
+        while time.time() < end_time:
+            if not self.parent.running:
+                return False
+            time.sleep(1)
+
         pressure_after = self.get_average_pressure()  
+
         pressure_difference = [
             abs(pressure_after[i] - pressure_before[i]) \
             if pressure_after[i] is not None and pressure_before[i] is not None \
             else None for i in range(len(pressure_before))
         ] 
+
         if any(p is not None and p > limit for p in pressure_difference):
             print("Leak test failed.") # prompt user for retry ...
+            return False
+
+        return True
 
     def correct_offset(self):
+        print("correct offset")
+
         # Open Valves
         self.smc_request(
             "set",
-            self.valve_reactors 
-            + self.valve_lines
-            + self.valve_vacuum,
+            [v.id for v in self.valve_reactors] 
+            + [v.id for v in self.valve_lines]
+            + [self.valve_vacuum.id],
             1
         )
 
-        time.sleep(20)
+        end_time = time.time() + 20
+        while time.time() < end_time:
+            if not self.parent.running:
+                return False
+            time.sleep(1)
 
         # Set Offset
         avg = self.get_average_pressure()
-        for i, r in self.reactors:
+        for i, r in enumerate(self.reactors):
             if i < len(avg):
                 r.offset = avg[i]
 
+        return True
+
     def h2_clean(self):
-        cfg = self.config["conditioning"]["h2 test"]
+        print("h2 clean")
+
+        cfg = self.config["conditioning"]["h2 clean"]
         repetitions = cfg["h2 cycle repetitions"]  
         duration = cfg["h2 cycle duration"]
         
         for _ in range(repetitions):
             # Set Valves
-            self.smc_request("set", self.valve_vacuum, 0)
-            self.smc_request("set", self.valve_h2, 1)
+            self.smc_request("set", [self.valve_vacuum.id], 0)
+            self.smc_request("set", [self.valve_h2.id], 1)
 
             # Vacuum
             while all(r.value is not None and r.value < 0.8 for r in self.reactors):
-                time.sleep(1.0)
                 if not self.parent.running:
                     return False
+                time.sleep(1.0)
 
             # Set Valves
-            self.smc_request("set", self.valve_h2, 0)
-            time.sleep(duration)
-            self.smc_request("set", self.valve_vacuum, 1)
-            time.sleep(60)
+            self.smc_request("set", [self.valve_h2.id], 0)
+
+            end_time = time.time() + duration
+            while time.time() < end_time:
+                if not self.parent.running:
+                    return False
+                time.sleep(1)
+
+            self.smc_request("set", [self.valve_vacuum.id], 1)
+
+            end_time = time.time() + 60
+            while time.time() < end_time:
+                if not self.parent.running:
+                    return False
+                time.sleep(1)
+
+            return True
 
     def clean_trap(self):
-        self.smc_request("set", self.valve_vacuum, 0)
+        print("clean trap")
+
+        self.smc_request("set", [self.valve_vacuum.id], 0)
         
         # open switch
 
@@ -223,15 +274,28 @@ class Procedures:
 
         # close switch
 
-        pass
+        return True
 
     def conditioning(self):
-        self.update()
-        self.oxidise_iron()
-        self.leak_test()
-        self.correct_offset()
-        self.h2_clean()
-        self.clean_trap()
+        functions = [
+            self.update,
+            self.oxidise_iron,
+            self.leak_test,
+            self.correct_offset,
+            self.h2_clean,
+            self.clean_trap
+        ]
+
+        for func in functions:
+            if not func():
+                self.parent.running = False
+                return 
+
+        # read if continue and add sampling and reaction
+
+        self.parent.running = False
+
+        return True
 
     # ----- Sample -----
     def load_trap(self):
@@ -322,50 +386,77 @@ class Procedures:
         )
         time.sleep(5)
 
-    def reaction(self):
-        self.tm_worker.send_request("set_temperature_multiple", self.tm.ovens, 580)
+    # ----- Reacting -----
+    def react(self):
+        cfg = self.config["reacting"]["reaction"]
+        duration = cfg["reaction duration"]
+        limit = cfg["end pressure limit"]
+
+        self.tm_request("set", [o.id for o in self.ovens], 580)
 
         # peltier coolers
 
-        # wait for ovens to reach temperature
-        temperatures = self.tm_worker.cache
-        start_time = time.time()
-        while not all(t > 560 for t in temperatures):
-            time.sleep(1.0)
-            temperatures = self.tm_worker.cache
-            # timeout
-            if time.time() - start_time > 10:
-                self.tm_worker.send_request("stop_multiple", self.tm.ovens)
-                self.smc_worker.send_request("close_all")
-                return
+        # Heat Ovens
+        while any(o.value is not None and o.value < 560 for o in self.ovens):
+            if not self.parent.running:
+                raise RuntimeError("Procedure aborted by user")
+            time.sleep(1)
 
-        # oven up
+        # Lift 
+        self.smc_request("set", [self.valve_lift.id], 1)
 
-        time.sleep(2)
+        time_end = time.time() + duration
+        while time.time() < time_end:
+            if not self.parent.running:
+                raise RuntimeError("Procedure aborted by user")
+            time.sleep(1)
 
-        pressures = self.keller_worker.cache
-        if any(p is not None and p > 0.18 for p in pressures):
-            # user input if continue or not
-            pass
+        # Pressure Check
+        if any(r.value is not None and r.value > limit for r in self.reactors):
+            print("Error: Pressure below threshold. Iron oxidation process stopped.")
+            return False # User input
+
 
     def remove_water(self):
-        self.smc_worker.send_request(
-            "open_multiple",
-            self.smc.lines
-            + self.smc.reactors
-            + self.smc.vacuum
+        cfg = self.config["reacting"]["remove water"]
+        duration = cfg["water removal duration"]
+
+        # Open Valves
+        self.smc_request(
+            "set",
+            [v.id for v in self.valve_lines]
+            + [v.id for v in self.valve_reactors]
+            + [self.valve_vacuum.id],
+            1
         )
 
         # off peltiers
 
-        time.sleep(420)
+        time_end = time.time() + duration
+        while time.time() < time_end:
+            if not self.parent.running:
+                raise RuntimeError("Procedure aborted by user")
+            time.sleep(1)
 
-        self.smc_worker.send_request(
-            "close_multiple",
-            self.smc.lines
-            + self.smc.reactors
-            + self.smc.vacuum
+        # Close Valves
+        self.smc_request(
+            "set",
+            [v.id for v in self.valve_lines]
+            + [v.id for v in self.valve_reactors]
+            + [self.valve_vacuum.id],
+            0
         )
+
+    def reacting(self):
+        functions = [self.react, self.remove_water]
+
+        for func in functions:
+            if not func():
+                self.parent.running = False
+                return False
+
+        self.parent.running = False
+        return True
 
 
         

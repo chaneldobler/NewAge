@@ -10,7 +10,7 @@ class Worker(QThread):
         self.object = object
         self.get = get
         self.idx = idx
-        self.cache = None 
+        self.cache = None
         self.requests = queue.Queue()
         self.running = True
         self.delta_t = delta_t
@@ -23,7 +23,7 @@ class Worker(QThread):
                 if hasattr(self.object, func):
                     set = getattr(self.object, func)
                     set(*args)
-            
+
             # Get
             if self.get is not None and hasattr(self.object, self.get):
                 get = getattr(self.object, self.get)

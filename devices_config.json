@@ -24,8 +24,8 @@
     "Oven 2": 3
   },
   "Coolers": {
-    "Peltier 1": 1,
-    "Peltier 2": 2
+    "Peltier 1": 11,
+    "Peltier 2": 15
   },
   "Reactors": {
     "Reactor 1": 1,
