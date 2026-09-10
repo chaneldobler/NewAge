@@ -3,16 +3,21 @@ import subprocess
 import time
 import json
 import numpy as np
+from PySide6.QtCore import QMutex, QMutexLocker
 
 # the connection times out pretty quickly. try to re-establish a connection if communication failed.
 
 # check vendor id and serial number
+
+# TODO: Errors don't work with mutex
 
 class SmcDevNet: 
     gr_2_id = 2 << 9 
     bus = None
 
     def __init__(self):
+        self.mutex = QMutex()
+
         # DIP switches 3 to 4 (default 125k baud)
         self.bitrate = 125000
 
@@ -58,6 +63,7 @@ class SmcDevNet:
                 raise RuntimeError(f"Duplicate ID detected")
 
     def send_message(self, id, data):
+        locker = QMutexLocker(self.mutex)
         msg = can.Message(arbitration_id=id, data=data, is_extended_id=False)
         self.bus.send(msg)
         reply = self.bus.recv(1.0)

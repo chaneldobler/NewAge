@@ -5,9 +5,9 @@ import time
 import json
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QMutex, QMutexLocker
 
-import keller, smc, tm
+import keller, smc, tm, peltier
 import worker
 import procedures
 
@@ -15,12 +15,11 @@ class Reactor(QWidget):
     def __init__(self, parent, id):
         super().__init__(parent)
         self.parent = parent
-
-        # Properties
         self.id = id
         self.active = True 
         self.value = 0
         self.offset = 0
+        self.slope = 1
 
         # Colored Header
         self.color = QColor.fromHslF(((self.id + 4)/12) % 1, 0.95, 0.45)
@@ -90,21 +89,22 @@ class Reactor(QWidget):
             }}
         """)
 
+    def get_value(self):
+        return self.slope*(self.value - self.offset)
+
     def set_value(self, val: float):
+        self.value = val
         if not self.active:
             self.display.setText("")
         elif val is None:
             self.display.setText("-- mbar")
         else:
-            self.display.setText(f"{int((val - self.offset) * 1000)} mbar")
-        self.value = val
+            self.display.setText(f"{int(self.get_value() * 1000)} mbar")
 
 class Oven(QWidget):
     def __init__(self, parent, id):
         super().__init__(parent)
         self.parent = parent
-
-        # Properties
         self.id = id
         self.active = True 
         self.value = 0
@@ -253,9 +253,9 @@ class Trap(QWidget):
     def set_running(self, running: bool):
         if self.running != running:
             if running:
-                self.running.setText("Heating ON")
+                self.status.setText("Heating ON")
             else:
-                self.running.setText("Heating OFF")
+                self.status.setText("Heating OFF")
             self.running = running
 
 class Peltier(QWidget):
@@ -315,24 +315,20 @@ class Peltier(QWidget):
     def set_running(self, running: bool):
         if self.running != running:
             if running:
-                self.running.setText("Cooling ON")
+                self.status.setText("Cooling ON")
             else:
-                self.running.setText("Cooling OFF")
+                self.status.setText("Cooling OFF")
             self.running = running
             
 class Valve(QWidget):
-    def __init__(self, parent, id, request=None):
+    def __init__(self, parent, id):
         super().__init__(parent)
         self.parent = parent
-        self.request = request
-
-        # Properties
         self.id = id
         self.active = False
 
         # Toggle Button
         self.button = QPushButton(f"{self.id}")
-        self.button.clicked.connect(self.request_toggle)
         self.button.setFixedSize(24, 24)
 
         # Button Container
@@ -340,10 +336,6 @@ class Valve(QWidget):
         self.container.addWidget(self.button)
 
         self.update()
-
-    def request_toggle(self):
-        if self.request is not None:
-            self.request("set", [self.id], not self.active)
 
     def update(self):
         color = "white" if self.active else "black"
@@ -398,7 +390,7 @@ class Vacuum(QWidget):
         self.parent = parent
 
         # Colored Header
-        self.header = QLabel(f"Vacuum", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.header = QLabel(f"Vac", alignment=Qt.AlignmentFlag.AlignCenter)
         self.header.setStyleSheet(f"""
             QLabel {{
                 background-color: #555555;
@@ -415,13 +407,13 @@ class Vacuum(QWidget):
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.header)
 
-class Switch(QWidget):
+class He(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
 
         # Colored Header
-        self.header = QLabel(f"Switch", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.header = QLabel(f"He", alignment=Qt.AlignmentFlag.AlignCenter)
         self.header.setStyleSheet(f"""
             QLabel {{
                 background-color: #555555;
@@ -442,32 +434,48 @@ class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.grid = QGridLayout(self)
-        self.setContentsMargins(20, 20, 20, 20)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)
 
-        # ----- Valves -----
-        self.smc_device = smc.SmcDevNet()
-        self.smc_device.start()
-        self.smc_worker = worker.Worker(self.smc_device, "get", delta_t=0.2)
-
+        # ----- Widgets -----
+        # Valves
         valves = self.config["Valves"]
-        self.valve_reactors = [Valve(self, id, self.smc_worker.request) for name, id in valves.items() if "Reactor" in name]
-        self.valve_lines = [Valve(self, id, self.smc_worker.request) for name, id in valves.items() if "Line" in name]
-        self.valve_vacuum = Valve(self, valves["Vacuum"], self.smc_worker.request)
-        self.valve_trap = Valve(self, valves["Trap"], self.smc_worker.request)
-        self.valve_h2 = Valve(self, valves["H2"], self.smc_worker.request)
-        self.valve_vortex = Valve(self, valves["Vortex"], self.smc_worker.request)
-        self.valve_vortex.hide()
-        self.valve_lift = Valve(self, valves["Lift"], self.smc_worker.request)
-        self.valve_lift.hide()
+        self.valve_reactors = [Valve(self, id) for name, id in valves.items() if "Reactor" in name]
+        self.valve_lines = [Valve(self, id) for name, id in valves.items() if "Line" in name]
+        self.valve_vacuum = Valve(self, valves["Vacuum"])
+        self.valve_trap = Valve(self, valves["Trap"])
+        self.valve_h2 = Valve(self, valves["H2"])
+        self.valve_vortex = Valve(self, valves["Vortex"])
+        self.valve_he = Valve(self, valves["He"])
+        self.valve_lift = Valve(self, valves["Lift"])
         self.valves = self.valve_reactors + self.valve_lines \
-            + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_lift]
+            + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_he, self.valve_lift]
 
-        self.smc_worker.update.connect(lambda values: self.update(self.valves, values))
-        self.smc_worker.start()
+        self.valve_vortex.hide()
+        self.valve_lift.hide()
 
+        # Reactors
+        self.reactors = [Reactor(self, id) for _, id in self.config["Reactors"].items()]
+
+        # Heaters 
+        heaters = self.config["Heaters"]
+        self.trap = Trap(self, heaters["Trap"])
+        self.ovens = [Oven(self, id) for name, id in heaters.items() if "Oven" in name]
+        self.heaters = [self.trap] + self.ovens
+
+        # Coolers
+        self.peltiers = [Peltier(self, id) for _, id in self.config["Coolers"].items()]
+
+        # Symbols
+        self.h2 = H2(self)
+        self.vacuum = Vacuum(self)
+        self.he = He(self)
+
+        # ----- Layout ------
+        self.grid = QGridLayout(self)
+        self.setContentsMargins(20, 20, 20, 20)
+
+        # Valves
         for i, v in enumerate(self.valve_reactors[:5]):
             self.grid.addWidget(v, 9, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
         for i, v in enumerate(self.valve_reactors[5:10]):
@@ -477,49 +485,49 @@ class Schematic(QWidget):
         self.grid.addWidget(self.valve_vacuum, 6, 4, alignment=Qt.AlignmentFlag.AlignRight)
         self.grid.addWidget(self.valve_trap, 5, 4, alignment=Qt.AlignmentFlag.AlignLeft)
         self.grid.addWidget(self.valve_h2, 4, 4, alignment=Qt.AlignmentFlag.AlignRight)
+        self.grid.addWidget(self.valve_he, 6, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ----- Reactors -----
-        self.reactors = [Reactor(self, id) for _, id in self.config["Reactors"].items()]
-
-        self.keller_device = keller.Keller()
-        self.keller_worker = worker.Worker(self.keller_device, "get", [r.id for r in self.reactors], 0.1)
-        self.keller_worker.update.connect(lambda values: self.update(self.reactors, values))
-        self.keller_worker.start()
-
+        # Reactors
         for i, r in enumerate(self.reactors[:5]):
             self.grid.addWidget(r, 10, i + 4, alignment=Qt.AlignmentFlag.AlignCenter)
         for i, r in enumerate(self.reactors[5:]):
             self.grid.addWidget(r, 0, 8 - i, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ----- Heaters -----
-        heaters = self.config["Heaters"]
-        self.trap = Trap(self, heaters["Trap"])
-        self.ovens = [Oven(self, id) for name, id in heaters.items() if "Oven" in name]
-        self.heaters = [self.trap] + self.ovens
-
-        self.tm_device = tm.TMHardware()
-        self.tm_worker = worker.Worker(self.tm_device, "get", [h.id for h in self.heaters], 1.0)
-        self.tm_worker.update.connect(lambda values: self.update(self.heaters, values))
-        self.tm_worker.start()
-
+        # Heaters
         self.grid.addWidget(self.ovens[0], 7, 8, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.ovens[1], 3, 8, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.trap, 4, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ----- Coolers ----- 
-        self.peltiers = [Peltier(self, id) for _, id in self.config["Coolers"].items()]
-
+        # Coolers
         self.grid.addWidget(self.peltiers[0], 7, 7, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.peltiers[1], 3, 7, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ----- Symbols -----
-        self.h2 = H2(self)
-        self.vacuum = Vacuum(self)
-        self.switch = Switch(self)
-
+        # Symbols
         self.grid.addWidget(self.h2, 4, 5, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.vacuum, 6, 5, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.switch, 6, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.he, 7, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # ----- Workers ------
+        if self.parent is not None:
+            self.smc_device = self.parent.smc_device 
+            self.keller_device = self.parent.keller_device
+            self.tm_device = self.parent.tm_device
+            self.peltier_device = self.parent.peltier_device
+
+            self.smc_worker = worker.Worker(get=self.smc_device.get, dt=0.2)
+            self.keller_worker = worker.Worker(get=self.keller_device.get, dt=0.1, idx=[r.id for r in self.reactors])
+            self.tm_worker = worker.Worker(get=self.tm_device.get, dt=1.0, idx=[h.id for h in self.heaters])
+            self.peltier_worker = worker.Worker(dt=1.0)
+
+            self.smc_worker.update.connect(lambda values: self.update(self.valves, values))
+            self.keller_worker.update.connect(lambda values: self.update(self.reactors, values))
+            self.tm_worker.update.connect(lambda values: self.update(self.heaters, values))
+
+            self.smc_worker.request(self.smc_device.start)
+            self.smc_worker.start()
+            self.keller_worker.start()
+            self.tm_worker.start()
+            self.peltier_worker.start()
 
     def update(self, objects, values):
         for obj in objects:
@@ -554,30 +562,26 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(4, 0).center(), self.grid.cellRect(6, 0).center())
         painter.drawLine(self.grid.cellRect(4, 0).center(), self.grid.cellRect(4, 2).center())
         painter.drawLine(self.grid.cellRect(6, 0).center(), self.grid.cellRect(6, 2).center())
+        painter.drawLine(self.grid.cellRect(6, 1).center(), self.grid.cellRect(7, 1).center())
 
     def stop(self):
         for h in self.heaters:
-            self.tm_worker.request("halt", h.id)
             h.set_running(False)
 
-        self.smc_worker.request("close_all")
+        for p in self.peltiers:
+            p.set_running(False)
 
     def closeEvent(self, event):
-        # Keller
-        self.keller_worker.stop()
+        if self.parent is not None:
+            self.tm_worker.request(self.tm_device.stop, [h.id for h in self.heaters])
+            self.peltier_worker.request(self.peltier_device.stop)
+            self.smc_worker.request(self.smc_device.stop)
 
-        # TM
-        self.tm_worker.request("stop", [h.id for h in self.heaters])
-        time.sleep(0.1)
-        self.tm_worker.stop()
+            self.keller_worker.stop()
+            self.tm_worker.stop()
+            self.smc_worker.stop()
+            self.peltier_worker.stop()
 
-        # Stop Peltiers
-
-        # SMC
-        self.smc_worker.stop()
-        self.smc_device.stop()
-
-        # Propagate
         event.accept()
 
 if __name__ == "__main__":

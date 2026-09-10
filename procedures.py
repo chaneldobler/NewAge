@@ -16,6 +16,7 @@ class Procedures:
         self.keller_request = self.schematic.keller_worker.request
         self.tm_request = self.schematic.tm_worker.request
         self.smc_request = self.schematic.smc_worker.request
+        self.peltiers_request = self.schematic.peltiers_worker.request
 
         self.reset()
 
@@ -31,6 +32,7 @@ class Procedures:
         self.valve_h2 = self.schematic.valve_h2
         self.valve_vortex = self.schematic.valve_vortex
         self.valve_lift = self.schematic.valve_lift
+        self.valve_he = self.schematic.valve_he
 
         # Reactors
         self.reactors = self.schematic.reactors
@@ -73,9 +75,13 @@ class Procedures:
         idx = [r.id for r in self.reactors if r.id <= 5] + [21 - r.id for r in self.reactors if r.id > 5]
         self.valve_reactors = [v for v in self.schematic.valves if v.id in idx]
 
-        return True
+    def evacuate_reactors(self):
+        self.smc_request("set", [self.valve_trap.id, self.valve_h2.id], 0)
+        self.smc_request("set", [self.valve_vacuum.id] + [v.id for v in self.valve_lines + self.valve_reactors], 1)
+        
 
-    # ----- Conditioning -----
+
+
     def oxidise_iron(self):
         print("oxidize iron")
 
@@ -85,13 +91,11 @@ class Procedures:
 
         # Pressure Check
         if any(r.value is not None and r.value < 0.8 for r in self.reactors):
-            print("Error: Pressure below threshold. Iron oxidation process stopped.")
-            return False
+            return 1, "Pressure below threshold. Iron oxidation stopped."
 
         # Set and Run Ovens
         if temperature > 650:
-            print("Error: Conditioning temperature unsafe. Iron oxidation process stopped.")
-            return False
+            return 1, "Conditioning temperature unsafe. Iron oxidation stopped."
         for o in self.ovens:
             self.tm_request("set_temperature", o.id, temperature)
             self.tm_request("run", o.id)
@@ -111,12 +115,11 @@ class Procedures:
             [v.id for v in self.valve_lines],
             1
         )
-        time.sleep(1.0)
 
         # Heat Ovens
         while any(o.value is not None and o.value < temperature for o in self.ovens):
             if not self.parent.running:
-                return False
+                return 2, "Iron oxidation stopped."
             time.sleep(1.0)
 
         # Lift Samples
@@ -129,10 +132,10 @@ class Procedures:
         end_time = time.time() + duration
         while time.time() < end_time:
             if not self.parent.running:
-                return False
+                return 2, "Iron oxidation stopped."
             time.sleep(1)
 
-        return True
+        return 0, "Iron oxidation finished."
 
     def get_average_pressure(self):
         pressures = [0.0] * len(self.reactors)
@@ -167,7 +170,7 @@ class Procedures:
         end_time = time.time() + 180
         while time.time() < end_time:
             if not self.parent.running:
-                return False
+                return 2, "Leak test stopped."
             time.sleep(1)
 
         # Close Valves
@@ -183,7 +186,7 @@ class Procedures:
         end_time = time.time() + duration
         while time.time() < end_time:
             if not self.parent.running:
-                return False
+                return 2, "Leak test stopped."
             time.sleep(1)
 
         pressure_after = self.get_average_pressure()  
@@ -195,10 +198,9 @@ class Procedures:
         ] 
 
         if any(p is not None and p > limit for p in pressure_difference):
-            print("Leak test failed.") # prompt user for retry ...
-            return False
+            return 3, "Leak test failed."
 
-        return True
+        return 0, "Leak test successful."
 
     def correct_offset(self):
         print("correct offset")
@@ -215,7 +217,7 @@ class Procedures:
         end_time = time.time() + 20
         while time.time() < end_time:
             if not self.parent.running:
-                return False
+                return 2, "Offset correction stopped."
             time.sleep(1)
 
         # Set Offset
@@ -224,7 +226,7 @@ class Procedures:
             if i < len(avg):
                 r.offset = avg[i]
 
-        return True
+        return 0, "Offset correction finished."
 
     def h2_clean(self):
         print("h2 clean")
@@ -241,7 +243,7 @@ class Procedures:
             # Vacuum
             while all(r.value is not None and r.value < 0.8 for r in self.reactors):
                 if not self.parent.running:
-                    return False
+                    return 2, "H2 cleaning stopped."
                 time.sleep(1.0)
 
             # Set Valves
@@ -250,7 +252,7 @@ class Procedures:
             end_time = time.time() + duration
             while time.time() < end_time:
                 if not self.parent.running:
-                    return False
+                    return 2, "H2 cleaning stopped."
                 time.sleep(1)
 
             self.smc_request("set", [self.valve_vacuum.id], 1)
@@ -258,10 +260,10 @@ class Procedures:
             end_time = time.time() + 60
             while time.time() < end_time:
                 if not self.parent.running:
-                    return False
+                    return 2, "H2 cleaning stopped."
                 time.sleep(1)
 
-            return True
+            return 0, "H2 cleaning finished."
 
     def clean_trap(self):
         print("clean trap")
@@ -287,15 +289,13 @@ class Procedures:
         ]
 
         for func in functions:
-            if not func():
-                self.parent.running = False
-                return 
+            status, message = func()
+            if status:
+                return status, message
 
         # read if continue and add sampling and reaction
 
-        self.parent.running = False
-
-        return True
+        return 0,"Conditioning finished."
 
     # ----- Sample -----
     def load_trap(self):
@@ -392,14 +392,21 @@ class Procedures:
         duration = cfg["reaction duration"]
         limit = cfg["end pressure limit"]
 
-        self.tm_request("set", [o.id for o in self.ovens], 580)
+        # Start Ovens
+        for o in self.ovens:
+            self.tm_request("set_temperature", o.id, 580)
+            self.tm_request("run", o.id)
+            o.set_running(True)
 
-        # peltier coolers
+        # Start Coolers
+        self.peltiers_request("set", [p.id for p in self.peltiers], 1)
+        for p in self.peltiers:
+            p.set_running(True)
 
         # Heat Ovens
         while any(o.value is not None and o.value < 560 for o in self.ovens):
             if not self.parent.running:
-                raise RuntimeError("Procedure aborted by user")
+                return 2, "Reaction stopped."
             time.sleep(1)
 
         # Lift 
@@ -408,14 +415,22 @@ class Procedures:
         time_end = time.time() + duration
         while time.time() < time_end:
             if not self.parent.running:
-                raise RuntimeError("Procedure aborted by user")
+                return 2, "Reaction stopped."
             time.sleep(1)
+
+        # Lift 
+        self.smc_request("set", [self.valve_lift.id], 0)
+
+        # Stop ovens
+        for o in self.ovens:
+            self.tm_request("halt", o.id)
+            o.set_running(False)
 
         # Pressure Check
         if any(r.value is not None and r.value > limit for r in self.reactors):
-            print("Error: Pressure below threshold. Iron oxidation process stopped.")
-            return False # User input
+            return 3, "Pressure above threshold."
 
+        return 0, "Reaction finished."
 
     def remove_water(self):
         cfg = self.config["reacting"]["remove water"]
@@ -430,12 +445,13 @@ class Procedures:
             1
         )
 
-        # off peltiers
+        # Stop Coolers
+        self.peltiers_request("set", [p.id for p in self.peltiers], 0)
 
         time_end = time.time() + duration
         while time.time() < time_end:
             if not self.parent.running:
-                raise RuntimeError("Procedure aborted by user")
+                return 2, "Water removal stopped."
             time.sleep(1)
 
         # Close Valves
@@ -447,16 +463,17 @@ class Procedures:
             0
         )
 
+        return 0, "Water removal finished."
+
     def reacting(self):
         functions = [self.react, self.remove_water]
 
         for func in functions:
-            if not func():
-                self.parent.running = False
-                return False
+            status, message = func()
+            if status:
+                return status, message
 
-        self.parent.running = False
-        return True
+        return 0, "Reaction finished."
 
 
         

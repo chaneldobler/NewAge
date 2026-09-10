@@ -1,6 +1,7 @@
 import minimalmodbus
 import time
 import json
+from PySide6.QtCore import QMutex, QMutexLocker
 
 # deactivate channels on destruction?
 
@@ -8,6 +9,8 @@ import json
 
 class TMHardware:
     def __init__(self):
+        self.mutex = QMutex()
+
         # Function Codes
         self.read_coil_status = 1
         self.read_holding_registers = 3
@@ -24,6 +27,7 @@ class TMHardware:
 
     # ----- Internal -----
     def get_temperature(self, id):
+        locker = QMutexLocker(self.mutex)
         try:
             register_value = self.instrument.read_register(
             registeraddress=0x03E8 + 6 * (id - 1),
@@ -36,6 +40,7 @@ class TMHardware:
             return None
 
     def set_temperature(self, id, value):
+        locker = QMutexLocker(self.mutex)
         try:
             self.instrument.write_register(
             registeraddress=0x03E8 * (id - 1),
@@ -47,6 +52,7 @@ class TMHardware:
             pass
 
     def get_set_temperature(self, id):
+        locker = QMutexLocker(self.mutex)
         try:
             register_value = self.instrument.read_register(
             registeraddress=0x03E8 * (id - 1),
@@ -58,6 +64,7 @@ class TMHardware:
             pass
 
     def get_status(self, id): # 0:RUN, 1:STOP
+        locker = QMutexLocker(self.mutex)
         try:
             bit_value = self.instrument.read_bit(
                 registeraddress=2 * (id - 1),
@@ -68,6 +75,7 @@ class TMHardware:
             return None
 
     def run(self, id):
+        locker = QMutexLocker(self.mutex)
         try:
             self.instrument.write_bit(
                 registeraddress=2 * (id - 1), 
@@ -78,6 +86,7 @@ class TMHardware:
             pass
 
     def halt(self, id):
+        locker = QMutexLocker(self.mutex)
         try:
             self.instrument.write_bit(
                 registeraddress=2 * (id - 1),

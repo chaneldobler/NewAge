@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QPolygonF, QBrus
 import pyqtgraph as pg
 
 # Hardware & Worker Imports
-import keller, smc, tm
+import keller, smc, tm, peltier
 import worker
 import procedures
 import schematic
@@ -20,7 +20,6 @@ class History(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.pressures = pressures
-
 
         # Properties
         self.history = [[] for _ in self.pressures]
@@ -54,7 +53,7 @@ class History(QWidget):
                 if not p.active or values[p.id - 1] is None:
                     val = float('nan')
                 else: 
-                    val = values[p.id - 1]
+                    val = p.get_value()
                 self.history[p.id - 1].append(val)
 
         # Time
@@ -66,174 +65,18 @@ class History(QWidget):
             if i < len(self.history):
                 curve.setData(self.time, self.history[i])
 
-class Conditioning(QWidget):
-    def __init__(self, parent, id, request=None):
-        super().__init__(parent)
-        self.parent = parent
-        self.request = request
-
-        # Properties
-        self.id = id
-
-        # Header
-        self.header = QLabel(f"Conditioning", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.header.setStyleSheet(f"""
-            QLabel {{
-                background-color: #acacac;
-                color: black;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 8px 16px;
-            }}
-        """)
-
-        # Toggle Button
-        self.button = QPushButton("Start")
-        self.button.clicked.connect(self.request_toggle)
-        self.button.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: #ffffff;
-                border: 1px solid #545b62;
-                border-radius: 0px;
-                font-size: 12px;
-                padding: 4px 4px;
-            }
-            QPushButton:hover {
-                background-color: #5c636a;
-            }
-            QPushButton:pressed {
-                background-color: #495057;
-            }
-        """)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.header)
-        self.container.addWidget(self.button)
-        self.container.setSpacing(0)
-
-    def request_toggle(self):
-        if self.request is not None:
-            self.parent.running = True
-            self.request("conditioning")
-
-class Sampling(QWidget):
-    def __init__(self, parent, id, request=None):
-        super().__init__(parent)
-        self.parent = parent
-        self.request = request
-
-        # Properties
-        self.id = id
-
-        # Header
-        self.header = QLabel(f"Sampling", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.header.setStyleSheet(f"""
-            QLabel {{
-                background-color: #acacac;
-                color: black;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 8px 16px;
-            }}
-        """)
-
-        # Toggle Button
-        self.button = QPushButton("Start")
-        self.button.clicked.connect(self.request_toggle)
-        self.button.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: #ffffff;
-                border: 1px solid #545b62;
-                border-radius: 0px;
-                font-size: 12px;
-                padding: 4px 4px;
-            }
-            QPushButton:hover {
-                background-color: #5c636a;
-            }
-            QPushButton:pressed {
-                background-color: #495057;
-            }
-        """)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.header)
-        self.container.addWidget(self.button)
-        self.container.setSpacing(0)
-
-    def request_toggle(self):
-        if self.request is not None:
-            self.parent.running = True
-            self.request("conditioning")
-
-class Reacting(QWidget):
-    def __init__(self, parent, id, request=None):
-        super().__init__(parent)
-        self.parent = parent
-        self.request = request
-
-        # Properties
-        self.id = id
-
-        # Header
-        self.header = QLabel(f"Reacting", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.header.setStyleSheet(f"""
-            QLabel {{
-                background-color: #acacac;
-                color: black;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-                font-size: 12px;
-                padding: 8px 16px;
-            }}
-        """)
-
-        # Toggle Button
-        self.button = QPushButton("Start")
-        self.button.clicked.connect(self.request_toggle)
-        self.button.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: #ffffff;
-                border: 1px solid #545b62;
-                border-radius: 0px;
-                font-size: 12px;
-                padding: 4px 4px;
-            }
-            QPushButton:hover {
-                background-color: #5c636a;
-            }
-            QPushButton:pressed {
-                background-color: #495057;
-            }
-        """)
-
-        # Box Container
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.header)
-        self.container.addWidget(self.button)
-        self.container.setSpacing(0)
-
-    def request_toggle(self):
-        if self.request is not None:
-            self.parent.running = True
-            self.request("conditioning")
-
 class Control(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
         # Properties
         self.running = False
+
+        # Devices
+        self.smc_device = smc.SmcDevNet()
+        self.keller_device = keller.Keller()
+        self.tm_device = tm.TMHardware()
+        self.peltier_device = peltier.Peltier()
 
         # Schematic
         self.schematic = schematic.Schematic(self)
@@ -244,19 +87,35 @@ class Control(QWidget):
 
         # ----- Procedures -----
         # Worker
-        self.procedures = procedures.Procedures(self)
-        self.procedures_worker = worker.Worker(self.procedures)
-        self.procedures_worker.start()
+        # self.procedures = procedures.Procedures(self)
+        # self.procedures_worker = worker.Worker()
+        # self.procedures_worker.start()
 
-        # Display
-        self.conditioning = Conditioning(self, 1, self.procedures_worker.request)
-        self.sampling = Sampling(self, 2, self.procedures_worker.request)
-        self.reacting = Reacting(self, 3, self.procedures_worker.request)
+        # Start Button
+        self.start_btn = QPushButton("Stop")
+        self.start_btn.clicked.connect(self.start)
+        self.start_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: #ffffff;
+                border: 1px solid #545b62;
+                border-radius: 0px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 8px 16px;
+            }
+            QPushButton:hover {
+                background-color: #5c636a;
+            }
+            QPushButton:pressed {
+                background-color: #495057;
+            }
+        """)
 
         # Stop Button
-        self.button = QPushButton("Stop")
-        self.button.clicked.connect(self.stop)
-        self.button.setStyleSheet("""
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.clicked.connect(self.stop)
+        self.stop_btn.setStyleSheet("""
             QPushButton {
                 background-color: #6c757d;
                 color: #ffffff;
@@ -276,10 +135,8 @@ class Control(QWidget):
 
         # Container
         self.container = QHBoxLayout()
-        self.container.addWidget(self.conditioning, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.container.addWidget(self.sampling, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.container.addWidget(self.reacting, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.container.addWidget(self.button, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.container.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.container.addWidget(self.stop_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Grid
         self.grid = QGridLayout(self)
@@ -289,14 +146,25 @@ class Control(QWidget):
 
         self.setContentsMargins(20, 20, 20, 20)
 
+    def handle(self, i: int, msg: str):
+        if i == 3:
+            self.stop() # retry
+        else:
+            self.stop() # Show msg    
+
+    def start(self):
+        pass
+
     def stop(self):
         self.schematic.stop()
         self.running = False
 
     def closeEvent(self, event):
         self.schematic.closeEvent(event)
+
         self.running = False
-        self.procedures_worker.stop()
+        # self.procedures_worker.stop()
+
         event.accept()
 
 if __name__ == "__main__":

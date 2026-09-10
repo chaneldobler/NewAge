@@ -1,9 +1,12 @@
 from smbus2 import SMBus, i2c_msg
 import time
 import json
+from PySide6.QtCore import QMutex, QMutexLocker
 
 class Keller: 
     def __init__(self):
+        self.mutex = QMutex()
+        
         self.min = 0.0
         self.max = 3.0
 
@@ -14,6 +17,7 @@ class Keller:
 
     # ----- Internal -----
     def get_pressure(self, id):
+        locker = QMutexLocker(self.mutex)
         try:
             addr = id + self.address_offset
             self.bus.write_byte(i2c_addr=addr, value=self.request_measurement)
