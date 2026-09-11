@@ -65,15 +65,21 @@ class History(QWidget):
             if i < len(self.history):
                 curve.setData(self.time, self.history[i])
 
+class Status(QWidget):
+    def __init__(self, parent):
+        pass
+
+    def update(self, status: int, message: str):
+        print(status)
+        print(message)
+
 class Control(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        # Properties
-        self.running = False
-
         # Devices
         self.smc_device = smc.SmcDevNet()
+        self.smc_device.start()
         self.keller_device = keller.Keller()
         self.tm_device = tm.TMHardware()
         self.peltier_device = peltier.Peltier()
@@ -85,14 +91,15 @@ class Control(QWidget):
         self.graph = History(self, self.schematic.reactors)
         self.schematic.keller_worker.update.connect(self.graph.update)
 
-        # ----- Procedures -----
-        # Worker
-        # self.procedures = procedures.Procedures(self)
-        # self.procedures_worker = worker.Worker()
-        # self.procedures_worker.start()
+        # Procedures 
+        self.procedures = procedures.Procedures(self)
+
+        # Status
+        self.status = Status(self)
+        self.procedures.procedures_worker.reply.connect(self.status.update)
 
         # Start Button
-        self.start_btn = QPushButton("Stop")
+        self.start_btn = QPushButton("Start")
         self.start_btn.clicked.connect(self.start)
         self.start_btn.setStyleSheet("""
             QPushButton {
@@ -144,26 +151,22 @@ class Control(QWidget):
         self.grid.addWidget(self.graph, 0, 1)
         self.grid.addLayout(self.container, 1, 0)
 
-        self.setContentsMargins(20, 20, 20, 20)
-
-    def handle(self, i: int, msg: str):
-        if i == 3:
-            self.stop() # retry
-        else:
-            self.stop() # Show msg    
+        self.setContentsMargins(20, 20, 20, 20) 
 
     def start(self):
-        pass
+        self.procedures.start()
 
     def stop(self):
         self.schematic.stop()
-        self.running = False
+        self.procedures.stop()
 
     def closeEvent(self, event):
         self.schematic.closeEvent(event)
+        self.procedures.closeEvent(event)
 
-        self.running = False
-        # self.procedures_worker.stop()
+        self.tm_device.stop([h.id for h in self.schematic.heaters])
+        self.peltier_device.stop()
+        self.smc_device.stop()
 
         event.accept()
 

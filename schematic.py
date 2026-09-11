@@ -514,16 +514,15 @@ class Schematic(QWidget):
             self.tm_device = self.parent.tm_device
             self.peltier_device = self.parent.peltier_device
 
-            self.smc_worker = worker.Worker(get=self.smc_device.get, dt=0.2)
-            self.keller_worker = worker.Worker(get=self.keller_device.get, dt=0.1, idx=[r.id for r in self.reactors])
-            self.tm_worker = worker.Worker(get=self.tm_device.get, dt=1.0, idx=[h.id for h in self.heaters])
-            self.peltier_worker = worker.Worker(dt=1.0)
+            self.smc_worker = worker.Worker(0.5, self.smc_device.get)
+            self.keller_worker = worker.Worker(0.1, self.keller_device.get, [r.id for r in self.reactors])
+            self.tm_worker = worker.Worker(1.0, self.tm_device.get, [h.id for h in self.heaters])
+            self.peltier_worker = worker.Worker(1.0)
 
             self.smc_worker.update.connect(lambda values: self.update(self.valves, values))
             self.keller_worker.update.connect(lambda values: self.update(self.reactors, values))
             self.tm_worker.update.connect(lambda values: self.update(self.heaters, values))
 
-            self.smc_worker.request(self.smc_device.start)
             self.smc_worker.start()
             self.keller_worker.start()
             self.tm_worker.start()
@@ -565,6 +564,8 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(6, 1).center(), self.grid.cellRect(7, 1).center())
 
     def stop(self):
+        self.smc_worker.request(self.smc_device.close_all)
+
         for h in self.heaters:
             h.set_running(False)
 
@@ -573,10 +574,6 @@ class Schematic(QWidget):
 
     def closeEvent(self, event):
         if self.parent is not None:
-            self.tm_worker.request(self.tm_device.stop, [h.id for h in self.heaters])
-            self.peltier_worker.request(self.peltier_device.stop)
-            self.smc_worker.request(self.smc_device.stop)
-
             self.keller_worker.stop()
             self.tm_worker.stop()
             self.smc_worker.stop()

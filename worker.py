@@ -1,28 +1,26 @@
+from PySide6.QtCore import QThread, Signal
 import queue
 import time
-from PySide6.QtCore import QThread, Signal
 
 class Worker(QThread):
     update = Signal(list)
+    reply = Signal(int, str)
     
-    def __init__(self, get=None, dt=0.2, idx=None):
+    def __init__(self, dt=1.0, func=None, *args):
         super().__init__()
-        self.get = get
-        self.idx = idx
-        self.dt = dt
-        self.cache = []
-        self.requests = queue.Queue()
         self.running = True
+        self.dt = dt
+        self.func = (lambda: func(*args)) if func is not None else None
+        self.requests = queue.Queue()
 
     def run(self):
         while self.running:
             while not self.requests.empty():
-                set, args = self.requests.get()
-                set(*args)
+                func, args = self.requests.get()
+                self.reply.emit(*func(*args))
 
-            if self.get is not None:
-                self.cache = self.get(self.idx) if self.idx is not None else self.get()
-                self.update.emit(self.cache)
+            if self.func is not None:
+                self.update.emit(self.func())
 
             time.sleep(self.dt)
 
