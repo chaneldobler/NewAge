@@ -4,7 +4,9 @@
     "iron preheating duration": 300
   },
   "clean trap": {
-    "clean trap duration": 60
+    "clean trap duration": 60,
+    "clean trap temperature": 450,
+    "trap cooling temperature": 10
   },
   "leak test": {
     "leak test duration": 300,
@@ -14,11 +16,17 @@
     "h2 cycle repetitions": 1,
     "h2 cycle duration": 300
   },
+  "load reactor": {
+    "trap vacuum duration": 10,
+    "trap release duration": 10,
+    "trap temperature": 420,
+    "co2 pressure": 100
+  },
   "reaction": {
     "reaction duration": 120,
     "end pressure limit": 0.18
   },
   "remove water": {
-    "water removal duration": 420
+    "remove water duration": 420
   }
 }

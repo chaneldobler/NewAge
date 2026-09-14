@@ -348,13 +348,15 @@ class Valve(QWidget):
                 font-weight: bold;
                 font-size: 12px;
             }}
-            QPushButton:hover {{
-                background-color: #5c636a;
-            }}
-            QPushButton:pressed {{
-                background-color: #495057;
-            }}
         """)
+
+
+            # QPushButton:hover {{
+            #     background-color: #5c636a;
+            # }}
+            # QPushButton:pressed {{
+            #     background-color: #495057;
+            # }}
 
     def set_value(self, active: bool):
         if self.active != active:

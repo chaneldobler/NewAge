@@ -11,7 +11,7 @@ class Keller:
         self.max = 3.0
 
         self.request_measurement = 0xAC
-        self.address_offset = 0x4F
+        self.base_address = 0x4F
 
         self.bus = SMBus(bus=1)
 
@@ -19,7 +19,7 @@ class Keller:
     def get_pressure(self, id):
         locker = QMutexLocker(self.mutex)
         try:
-            addr = id + self.address_offset
+            addr = id + self.base_address
             self.bus.write_byte(i2c_addr=addr, value=self.request_measurement)
 
             time.sleep(0.01) # Wait >= 8ms

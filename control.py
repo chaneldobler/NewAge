@@ -67,11 +67,85 @@ class History(QWidget):
 
 class Status(QWidget):
     def __init__(self, parent):
-        pass
+        super().__init__(parent)
+        # Colored Header
+        self.header = QLabel(f"Status", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.header.setStyleSheet(f"""
+            QLabel {{
+                background-color: #555555;
+                color: white;
+                border: none;
+                border-radius: 0px;
+                font-weight: bold;
+                font-size: 12px;
+                padding: 8px 16px;
+            }}
+        """)
+
+        # Name Display
+        self.name_display = QLabel("", alignment=Qt.AlignmentFlag.AlignLeft)
+        self.name_display.setStyleSheet(f"""
+            QLabel {{
+                background-color: white;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 8px 8px;
+            }}
+        """)
+
+        # Value Display
+        self.value_display = QLabel("", alignment=Qt.AlignmentFlag.AlignRight)
+        self.value_display.setStyleSheet(f"""
+            QLabel {{
+                background-color: white;
+                color: black;
+                border: none;
+                border-radius: 0px;
+                font-size: 12px;
+                padding: 8px 8px;
+            }}
+        """)
+
+        self.table = QHBoxLayout(self)
+        self.table.addWidget(self.name_display)
+        self.table.addWidget(self.value_display)
+
+        self.container = QVBoxLayout(self)
+        self.container.addWidget(self.header)
+        self.container.addLayout(self.table)
+        self.container.setSpacing(0)
+
+        self.update(0, "")
 
     def update(self, status: int, message: str):
-        print(status)
-        print(message)
+        if message != "" and message in self.names:
+            id = self.names.index(message)
+            if status == 0:
+                self.values[id] = 1  
+                self.config[message] = 1
+
+            with open("status.json", "w") as f:
+                json.dump(self.config, f, indent=2)
+
+        with open("status.json", "r") as f:
+            self.config = json.load(f)
+
+        self.names = list(self.config.keys())
+        self.values = list(self.config.values())
+
+        self.name_text = "\n" + "\n".join(self.names) + "\n"
+        self.value_text = "\n" + "\n".join(str(v) for v in self.values) + "\n"
+
+        self.name_display.setText(self.name_text)
+        self.value_display.setText(self.value_text)
+
+    def get_funcs(self):
+        func = []
+        for id, name in enumerate(self.names):
+            if self.values[id] == 0:
+                func.append(name.replace(" ", "_"))
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -142,6 +216,7 @@ class Control(QWidget):
 
         # Container
         self.container = QHBoxLayout()
+        self.container.addWidget(self.status, alignment=Qt.AlignmentFlag.AlignCenter)
         self.container.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignCenter)
         self.container.addWidget(self.stop_btn, alignment=Qt.AlignmentFlag.AlignCenter)
 
@@ -155,6 +230,11 @@ class Control(QWidget):
 
     def start(self):
         self.procedures.start()
+
+        for func in self.status.get_funcs():
+            f = getattr(self.procedures, func)
+            if f is not None:
+                self.procedures_worker.request(f)
 
     def stop(self):
         self.schematic.stop()
