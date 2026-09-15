@@ -27,6 +27,10 @@ class Worker(QThread):
     def request(self, func, *args):
         self.requests.put((func, args))
 
+    def clear(self):
+        with self.requests.mutex:
+            self.requests.queue.clear()
+
     def stop(self):
         self.running = False
         self.wait()

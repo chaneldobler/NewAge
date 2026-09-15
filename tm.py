@@ -111,15 +111,15 @@ class TMHardware:
 
 if __name__ == "__main__":
     tm = TMHardware()
-    tm.set([2, 3], 50)
-    tm.start([2, 3])
+    tm.set([1], 50)
+    tm.start([1])
     try:
         while True:
-            print(tm.get([2, 3]))
+            print(tm.get([1]))
             time.sleep(1.0)
     except KeyboardInterrupt:
         print("Program terminated by user.")
     except Exception as e:
         print(f"Program stopped due to an error: {e}")
     finally:
-        tm.stop([2, 3])
+        tm.stop([1])

@@ -476,6 +476,7 @@ class Schematic(QWidget):
         # ----- Layout ------
         self.grid = QGridLayout(self)
         self.setContentsMargins(20, 20, 20, 20)
+        self.setFixedSize(800, 800)
 
         # Valves
         for i, v in enumerate(self.valve_reactors[:5]):
@@ -566,13 +567,15 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(6, 1).center(), self.grid.cellRect(7, 1).center())
 
     def stop(self):
-        self.smc_worker.request(self.smc_device.close_all)
-
         for h in self.heaters:
             h.set_running(False)
 
+        for o in self.ovens:
+            o.set_active(True)
+
         for p in self.peltiers:
             p.set_running(False)
+            p.set_active(True)
 
     def closeEvent(self, event):
         if self.parent is not None:
