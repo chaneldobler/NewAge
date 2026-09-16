@@ -1,7 +1,6 @@
 {
-  "Oxidize Iron": {
-    "Status": 0,
-    "Configurations": {
+  "Conditioning": {
+    "Oxidize Iron": {
       "Conditioning Temperature": {
         "Value": 50,
         "Default": 500,
@@ -12,11 +11,8 @@
         "Default": 300,
         "Unit": "s"
       }
-    }
-  },
-  "Clean Trap": {
-    "Status": 1,
-    "Configurations": {
+    },
+    "Clean Trap": {
       "Clean Trap Duration": {
         "Value": 10,
         "Default": 60,
@@ -25,18 +21,15 @@
       "Clean Trap Temperature": {
         "Value": 10,
         "Default": 450,
-        "Unit": "\u00b0C"
+        "Unit": "°C"
       },
       "Trap Cooling Temperature": {
         "Value": 50,
         "Default": 10,
-        "Unit": "\u00b0C"
+        "Unit": "°C"
       }
-    }
-  },
-  "Leak Test": {
-    "Status": 1,
-    "Configurations": {
+    },
+    "Leak Test": {
       "Leak Test Duration": {
         "Value": 10,
         "Default": 300,
@@ -47,11 +40,8 @@
         "Default": 0.006,
         "Unit": "bar"
       }
-    }
-  },
-  "H2 Cleaning": {
-    "Status": 1,
-    "Configurations": {
+    },
+    "H2 Cleaning": {
       "H2 Cycle Repetitions": {
         "Value": 1,
         "Default": 1,
@@ -62,15 +52,11 @@
         "Default": 300,
         "Unit": "s"
       }
-    }
+    },
+    "Correct Offset": {}
   },
-  "Correct Offset": {
-    "Status": 1,
-    "Configurations": {}
-  },
-  "Iterate Reactors": {
-    "Status": 1,
-    "Configurations": {
+  "Load Samples": {
+    "Load Samples": {
       "Trap Vacuum Duration": {
         "Value": 10,
         "Default": 10,
@@ -84,12 +70,12 @@
       "Trap Heating Temperature": {
         "Value": 10,
         "Default": 420,
-        "Unit": "\u00b0C"
+        "Unit": "°C"
       },
       "Trap Cooling Temperature": {
         "Value": 50,
         "Default": 10,
-        "Unit": "\u00b0C"
+        "Unit": "°C"
       },
       "CO2 Pressure": {
         "Value": 100,
@@ -99,8 +85,7 @@
     }
   },
   "Reaction": {
-    "Status": 1,
-    "Configurations": {
+    "Reaction": {
       "Reaction Duration": {
         "Value": 10,
         "Default": 120,
@@ -111,11 +96,8 @@
         "Default": 0.18,
         "Unit": "bar"
       }
-    }
-  },
-  "Remove Water": {
-    "Status": 1,
-    "Configurations": {
+    },
+    "Remove Water": {
       "Remove Water Duration": {
         "Value": 10,
         "Default": 420,

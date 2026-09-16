@@ -4,8 +4,10 @@ import time
 
 class Worker(QThread):
     update = Signal(list)
-    reply = Signal(int, str)
-    
+    begin = Signal(str)
+    prompt = Signal(str)
+    end = Signal(str, str)
+
     def __init__(self, dt=1.0, func=None, *args):
         super().__init__()
         self.running = True
@@ -17,7 +19,7 @@ class Worker(QThread):
         while self.running:
             while not self.requests.empty():
                 func, args = self.requests.get()
-                self.reply.emit(*func(*args))
+                func(*args)
 
             if self.func is not None:
                 self.update.emit(self.func())

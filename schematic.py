@@ -128,7 +128,7 @@ class Oven(QWidget):
         """)
         
         # Status Display
-        self.status = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.status = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
         self.status.setStyleSheet(f"""
             QLabel {{
                 background-color: #6c757d;
@@ -180,9 +180,9 @@ class Oven(QWidget):
     def set_running(self, running: bool):
         if self.running != running:
             if running:
-                self.status.setText("Heating ON")
+                self.status.setText("Heating")
             else:
-                self.status.setText("Heating OFF")
+                self.status.setText("")
             self.running = running
 
 class Trap(QWidget):
@@ -224,7 +224,7 @@ class Trap(QWidget):
         """)
 
         # Status Display
-        self.status = QLabel("Heating OFF", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.status = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
         self.status.setStyleSheet(f"""
             QLabel {{
                 background-color: #6c757d;
@@ -253,13 +253,13 @@ class Trap(QWidget):
     def set_running(self, running: bool):
         if self.running != running:
             if running:
-                self.status.setText("Heating ON")
+                self.status.setText("Heating")
             else:
-                self.status.setText("Heating OFF")
+                self.status.setText("")
             self.running = running
 
 class Peltier(QWidget):
-    def __init__(self, parent, id):
+    def __init__(self, parent, id, nr):
         super().__init__(parent)
         self.parent = parent
 
@@ -270,10 +270,10 @@ class Peltier(QWidget):
 
         # Colored Header
         self.color = QColor.fromHslF(0.5, 0.5, 0.45)
-        self.header = QLabel(f"Peltier {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.header = QLabel(f"Peltier {nr}", alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Display 
-        self.status = QLabel("Cooling OFF", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.status = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
         self.status.setStyleSheet(f"""
             QLabel {{
                 background-color: #6c757d;
@@ -315,9 +315,9 @@ class Peltier(QWidget):
     def set_running(self, running: bool):
         if self.running != running:
             if running:
-                self.status.setText("Cooling ON")
+                self.status.setText("Cooling")
             else:
-                self.status.setText("Cooling OFF")
+                self.status.setText("")
             self.running = running
             
 class Valve(QWidget):
@@ -329,6 +329,7 @@ class Valve(QWidget):
 
         # Toggle Button
         self.button = QPushButton(f"{self.id}")
+        self.button.clicked.connect(self.request)
         self.button.setFixedSize(24, 24)
 
         # Button Container
@@ -348,20 +349,25 @@ class Valve(QWidget):
                 font-weight: bold;
                 font-size: 12px;
             }}
+            QPushButton:hover {{
+                background-color: #5c636a;
+            }}
+            QPushButton:pressed {{
+                background-color: #495057;
+            }}
         """)
-
-
-            # QPushButton:hover {{
-            #     background-color: #5c636a;
-            # }}
-            # QPushButton:pressed {{
-            #     background-color: #495057;
-            # }}
 
     def set_value(self, active: bool):
         if self.active != active:
             self.active = active
             self.update()
+
+    def request(self):
+        if hasattr(self.parent, "smc_device"):
+            if self.active:
+                self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 0)
+            else:
+                self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 1)
 
 class H2(QWidget):
     def __init__(self, parent):
@@ -372,7 +378,7 @@ class H2(QWidget):
         self.header = QLabel(f"H2", alignment=Qt.AlignmentFlag.AlignCenter)
         self.header.setStyleSheet(f"""
             QLabel {{
-                background-color: #555555;
+                background-color: #495057;
                 color: white;
                 border: none;
                 border-radius: 0px;
@@ -395,7 +401,7 @@ class Vacuum(QWidget):
         self.header = QLabel(f"Vac", alignment=Qt.AlignmentFlag.AlignCenter)
         self.header.setStyleSheet(f"""
             QLabel {{
-                background-color: #555555;
+                background-color: #495057;
                 color: white;
                 border: none;
                 border-radius: 0px;
@@ -409,16 +415,16 @@ class Vacuum(QWidget):
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.header)
 
-class He(QWidget):
+class EA(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
 
         # Colored Header
-        self.header = QLabel(f"He", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.header = QLabel(f"EA", alignment=Qt.AlignmentFlag.AlignCenter)
         self.header.setStyleSheet(f"""
             QLabel {{
-                background-color: #555555;
+                background-color: #495057;
                 color: white;
                 border: none;
                 border-radius: 0px;
@@ -448,10 +454,10 @@ class Schematic(QWidget):
         self.valve_trap = Valve(self, valves["Trap"])
         self.valve_h2 = Valve(self, valves["H2"])
         self.valve_vortex = Valve(self, valves["Vortex"])
-        self.valve_he = Valve(self, valves["He"])
+        self.valve_sampling = Valve(self, valves["He"])
         self.valve_lift = Valve(self, valves["Lift"])
         self.valves = self.valve_reactors + self.valve_lines \
-            + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_he, self.valve_lift]
+            + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_sampling, self.valve_lift]
 
         self.valve_vortex.hide()
         self.valve_lift.hide()
@@ -466,12 +472,12 @@ class Schematic(QWidget):
         self.heaters = [self.trap] + self.ovens
 
         # Coolers
-        self.peltiers = [Peltier(self, id) for _, id in self.config["Coolers"].items()]
+        self.peltiers = [Peltier(self, id, nr+1) for nr, (_, id) in enumerate(self.config["Coolers"].items())]
 
         # Symbols
         self.h2 = H2(self)
         self.vacuum = Vacuum(self)
-        self.he = He(self)
+        self.he = EA(self)
 
         # ----- Layout ------
         self.grid = QGridLayout(self)
@@ -488,7 +494,7 @@ class Schematic(QWidget):
         self.grid.addWidget(self.valve_vacuum, 6, 4, alignment=Qt.AlignmentFlag.AlignRight)
         self.grid.addWidget(self.valve_trap, 5, 4, alignment=Qt.AlignmentFlag.AlignLeft)
         self.grid.addWidget(self.valve_h2, 4, 4, alignment=Qt.AlignmentFlag.AlignRight)
-        self.grid.addWidget(self.valve_he, 6, 1, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.valve_sampling, 6, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Reactors
         for i, r in enumerate(self.reactors[:5]):

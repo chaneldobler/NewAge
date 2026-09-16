@@ -14,10 +14,13 @@ import tcpip
 class Procedures:
     def __init__(self, parent):
         self.parent = parent
+        with open("procedures_config.json", "r") as f:
+            self.config = json.load(f)
+
         self.running = False
+        self.pause = False # TODO prompt
 
         self.tcpip = tcpip.TcpIp()
-        self.schematic = self.parent.schematic
 
         self.smc_device = self.parent.smc_device 
         self.keller_device = self.parent.keller_device
@@ -27,20 +30,7 @@ class Procedures:
         self.procedures_worker = worker.Worker()
         self.procedures_worker.start()
 
-        self.reset()
-
-    def start(self):
-        self.update()
-        self.running = True
-
-    def stop(self):
-        self.procedures_worker.clear()
-        self.running = False
-        
-    # ----- Setup -----
-    def reset(self):
-        with open("procedures_config.json", "r") as f:
-            self.config = json.load(f)
+        self.schematic = self.parent.schematic
 
         # Valves
         self.valve_reactors = self.schematic.valve_reactors
@@ -50,7 +40,7 @@ class Procedures:
         self.valve_h2 = self.schematic.valve_h2
         self.valve_vortex = self.schematic.valve_vortex
         self.valve_lift = self.schematic.valve_lift
-        self.valve_he = self.schematic.valve_he
+        self.valve_sampling = self.schematic.valve_sampling
 
         # Reactors
         self.reactors = self.schematic.reactors
@@ -93,7 +83,46 @@ class Procedures:
         idx = [r.id for r in self.reactors if r.id <= 5] + [21 - r.id for r in self.reactors if r.id > 5]
         self.valve_reactors = [v for v in self.schematic.valves if v.id in idx]
 
+    def get_procedures(self, name=None):
+        procedures = []
+        if name is None:
+            for funcs in self.config.values():
+                for f in funcs:
+                    procedures.append(f)
+        elif name in self.config:
+            for f in self.config[name]:
+                procedures.append(f)
+        return procedures
+
+    def start(self, name=None):
+        self.update()
+        self.running = True
+        for func in self.get_procedures(name):
+            f = getattr(self, func.lower().replace(" ", "_"))
+            if f is not None:
+                self.procedures_worker.request(f)
+
+    def stop(self):
+        self.procedures_worker.clear()
+        self.running = False
+
     # ----- Helpers -----
+    def start_heaters(self, heaters, temperature):
+        self.tm_device.set([h.id for h in heaters], temperature)
+        self.tm_device.start([h.id for h in heaters])
+        for o in heaters:
+            o.set_running(True)    
+
+    def stop_heaters(self, heaters):
+        self.tm_device.stop([h.id for h in heaters])
+        for o in heaters:
+            o.set_running(False)
+
+    def set_peltiers(self, running):
+        self.peltier_device.set([p.id for p in self.peltiers], running)
+        for p in self.peltiers:
+            p.set_running(running)     
+
     def wait(self, duration):
         end_time = time.time() + duration
         while time.time() < end_time:
@@ -130,91 +159,83 @@ class Procedures:
 
         self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_lines + self.valve_reactors], 0)
 
-        return 0
-
-    def start_heaters(self, heaters, temperature):
-        self.tm_device.set([h.id for h in heaters], temperature)
-        self.tm_device.start([h.id for h in heaters])
-        for o in heaters:
-            o.set_running(True)    
-
-    def stop_heaters(self, heaters):
-        self.tm_device.stop([h.id for h in heaters])
-        for o in heaters:
-            o.set_running(False)
-
-    def set_peltiers(self, running):
-        self.peltier_device.set([p.id for p in self.peltiers], running)
-        for p in self.peltiers:
-            p.set_running(running)        
+        return 0   
 
     # ----- Procedures -----
     def oxidize_iron(self):
         message = "Oxidize Iron"
 
-        if any(r.value is not None and r.get_value() < 0.8 for r in self.reactors):
-            return 2, message
-
-        cfg = self.config["Oxidize Iron"]["Configurations"]
+        cfg = self.config["Conditioning"]["Oxidize Iron"]
         temperature = cfg["Conditioning Temperature"]["Value"]
         duration = cfg["Iron Preheating Duration"]["Value"]
 
+        if any(r.value is not None and r.get_value() < 0.8 for r in self.reactors):
+            self.procedures_worker.end.emit(message, "Pressure too low.")
+            return
+
         if temperature > 650:
-            return 2, message
+            self.procedures_worker.end.emit(message, "Oven temperature set too high.") # TODO prompts
+
+        self.procedures_worker.begin.emit(message) # TODO start when conditions met
 
         self.start_heaters(self.ovens, temperature)
 
         self.smc_device.set([self.valve_vacuum.id, self.valve_h2.id, self.valve_trap.id] \
             + [v.id for v in self.valve_reactors], 0)
-        # self.smc_device.set([v.id for v in self.valve_lines], 1)
+        self.smc_device.set([v.id for v in self.valve_lines], 1)
 
         while any(o.value is not None and o.value < temperature for o in self.ovens):
             if not self.running:
-                return 1, message
+                self.procedures_worker.end.emit(message, "Stopped.")
+                return 
             time.sleep(1.0)
 
         self.smc_device.set([self.valve_lift.id], 1)
 
         status = self.wait(duration)
         if status:
-            return 1, message    
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
 
-        self.smc_device.set([self.valve_lift.id], 0)
-
-        # self.smc_device.set([self.valve_lift.id] + [v.id for v in self.valve_lines], 0)
-
-        return 0, message
+        self.procedures_worker.end.emit(message, "")
+        return
 
     def clean_trap(self):
         message = "Clean Trap"
 
-        cfg = self.config["Clean Trap"]["Configurations"]
+        cfg = self.config["Conditioning"]["Clean Trap"]
         duration = cfg["Clean Trap Duration"]["Value"]
         temperature = cfg["Clean Trap Temperature"]["Value"]
         temperature_low = cfg["Trap Cooling Temperature"]["Value"]
 
         if temperature > 550:
-            return 2, message
+            self.procedures_worker.end.emit(message, "Trap temperature set too high.")
+            return
+
+        self.procedures_worker.begin.emit(message)
 
         self.smc_device.set([self.valve_trap.id], 0)
-        self.smc_device.set([self.valve_he.id], 1)
+        self.smc_device.set([self.valve_sampling.id], 1)
         
         status = self.wait(duration)
         if status:
-            return status, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
 
-        self.smc_device.set([self.valve_he.id], 0)
+        self.smc_device.set([self.valve_sampling.id], 0)
         
         self.start_heaters([self.trap], temperature)
 
         while self.trap.value is not None and self.trap.value < temperature:
             if not self.running:
-                return 1, message
+                self.procedures_worker.end.emit(message, "Stopped.")
+                return 
             time.sleep(1)
 
         status = self.wait(duration)
         if status:
-            return status, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
 
         self.stop_heaters([self.trap])
 
@@ -222,37 +243,45 @@ class Procedures:
 
         while self.trap.value is not None and self.trap.value > temperature_low:
             if not self.running:
-                return 1, message
+                self.procedures_worker.end.emit(message, "Stopped.")
+                return 
             time.sleep(1)
 
         self.smc_device.set([self.valve_vortex.id], 0)
 
-        return 0, message
+        self.procedures_worker.end.emit(message, "")
+        return 
 
     def leak_test(self):
         message = "Leak Test"
 
-        cfg = self.config["Leak Test"]["Configurations"]
+        cfg = self.config["Conditioning"]["Leak Test"]
         duration = cfg["Leak Test Duration"]["Value"]
         limit = cfg["Pressure Leak Limit"]["Value"]
 
+        self.procedures_worker.begin.emit(message)
+
         status = self.evacuate_reactors(30)
         if status:
-            return status, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
 
         self.smc_device.set([v.id for v in self.valve_reactors], 0)
 
         start = self.get_average_pressure()
         if start == -1:
-            return 1, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
         
         status = self.wait(duration)
         if status:
-            return status, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
         
         end = self.get_average_pressure()  
         if end == -1:
-            return 1, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
 
         result = [
             abs(start[i] - end[i]) \
@@ -261,61 +290,67 @@ class Procedures:
         ] 
 
         if any(p is not None and p > limit for p in result):
-            return 2, message
+            self.procedures_worker.end.emit(message, "Pressure above limit.")
+            return 
 
-        return 0, message
+        self.procedures_worker.end.emit(message, "")
+        return 
 
     def h2_cleaning(self):
         message = "H2 Cleaning"
 
-        cfg = self.config["H2 Cleaning"]["Configurations"]
+        cfg = self.config["Conditioning"]["H2 Cleaning"]
         repetitions = cfg["H2 Cycle Repetitions"]["Value"]
         duration = cfg["H2 Cycle Duration"]["Value"]
 
-        self.smc_device.set([self.valve_lift.id], 1)
-        self.smc_device.set([self.valve_vacuum.id], 0)  
+        self.procedures_worker.begin.emit(message)
         
         for _ in range(repetitions):
             self.smc_device.set([self.valve_h2.id], 1)
 
             while all(r.get_value() is not None and r.value < 0.8 for r in self.reactors):
                 if not self.running:
-                    return 1, message
+                    self.procedures_worker.end.emit(message, "Stopped.")
+                    return 
                 time.sleep(1.0)
 
             self.smc_device.set([self.valve_h2.id], 0)
 
             status = self.wait(duration)
             if status:
-                return status, message
-
-        self.smc_device.set([self.valve_vacuum.id], 1)
-        self.smc_device.set([self.valve_lift.id, self.valve_trap.id], 0)
+                self.procedures_worker.end.emit(message, "Stopped.")
+                return 
 
         return 0, message
 
     def correct_offset(self):
         message = "Correct Offset"
 
-        self.smc_device.set([self.valve_vacuum.id] \
-            + [v.id for v in self.valve_reactors + self.valve_lines], 1)
+        self.procedures_worker.begin.emit(message)
+
+        self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 1)
 
         status = self.wait(20)
         if status:
-            return status, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
 
         offsets = self.get_average_pressure()
         if offsets == -1:
-            return 1, message
+            self.procedures_worker.end.emit(message, "Stopped.")
+            return 
         
         for i, r in enumerate(self.reactors):
             if i < len(offsets):
                 r.offset = offsets[i]
 
-        return 0, message
+        self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 0)
+
+        self.procedures_worker.end.emit(message, "")
+        return 
 
     def load_reactor(self, reactor):
-        cfg = self.config["Iterate Reactors"]["Configurations"]
+        cfg = self.config["Iterate Reactors"]
 
         vacuum_duration = cfg["Trap Vacuum Duration"]["Value"]
         release_duration = cfg["Trap Release Duration"]["Value"]
@@ -327,7 +362,7 @@ class Procedures:
 
         self.set_peltiers(0)
 
-        self.smc_device.set([self.valve_h2.id, self.valve_he.id] \
+        self.smc_device.set([self.valve_h2.id, self.valve_sampling.id] \
             + [v.id for v in self.valve_reactors], 0)
         self.smc_device.set([v.id for v in self.valve_lines] \
             + [reactor.id, self.valve_vacuum.id, self.valve_trap.id], 1)
@@ -350,13 +385,13 @@ class Procedures:
             return status         
 
         self.smc_device.set([self.valve_trap.id, reactor.id], 0)
-        self.smc_device.set([self.valve_he.id], 1)
+        self.smc_device.set([self.valve_sampling.id], 1)
         
         status = self.wait(60)
         if status:
             return status
 
-        self.smc_device.set([self.valve_he.id], 0)
+        self.smc_device.set([self.valve_sampling.id], 0)
 
         while reactor.value is not None and reactor.get_value() > 100: # TODO: Repeat until (pressure_reactor_xx/pressure_calib) < trap_max_c: 
             if not self.running:
@@ -388,7 +423,7 @@ class Procedures:
 
         return 0
 
-    def burn_sample(self, name):
+    def sampling(self, name):
         tcpip.start()
 
         while tcpip.get_status().split()[3] != "RUN":
@@ -408,7 +443,7 @@ class Procedures:
                     return 1
                 time.sleep(1)
 
-            self.smc_device.set([self.valve_he.id], 1)
+            self.smc_device.set([self.valve_sampling.id], 1)
 
             while tcpip.trap_status().split()[2] != "15":
                 if not self.running:
@@ -417,7 +452,7 @@ class Procedures:
                     return 1
                 time.sleep(1)
 
-            self.smc_device.set([self.valve_he.id], 0)
+            self.smc_device.set([self.valve_sampling.id], 0)
 
             tcpip.trap_off()
 
@@ -425,10 +460,10 @@ class Procedures:
 
         return 0
 
-    def iterate_reactors(self):
-        message = "Iterate Reactors"
+    def load_sampels(self):
+        message = "Load Samples"
 
-        cfg = self.config["Iterate Reactors"]["Configurations"]
+        cfg = self.config["Load Samples"]["Load Samples"]
         temperature_low = cfg["Trap Cooling Temperature"]["Value"]
 
         for reactor in self.reactors:
@@ -452,11 +487,11 @@ class Procedures:
 
                 if name.split()[0].lower() != "pre":
 
-                        status = self.load_reactor(reactor)
+                        status = self.sampling(name)
                         if status:
                             return status, message
 
-                        status = self.burn_sample(name)
+                        status = self.load_reactor(reactor)
                         if status:
                             return status, message
 
@@ -464,11 +499,10 @@ class Procedures:
                 if status:
                     return status, message
                 
-
     def reaction(self):
         message = "Reaction"
 
-        cfg = self.config["Reaction"]["Configurations"]
+        cfg = self.config["Reaction"]
         duration = cfg["Reaction Duration"]["Value"]
         limit = cfg["Pressure End Limit"]["Value"]
 
@@ -499,7 +533,7 @@ class Procedures:
     def remove_water(self): 
         message = "Remove Water"
 
-        cfg = self.config["Remove Water"]["Configurations"]
+        cfg = self.config["Remove Water"]
         duration = cfg["Remove Water Duration"]["Value"]
 
         self.set_peltiers(0)
