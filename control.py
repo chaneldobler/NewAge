@@ -70,74 +70,6 @@ class History(QWidget):
         self.history = [[] for _ in self.pressures]
         self.time = []
 
-class Status(QWidget):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        with open("procedures_config.json", "r") as f:
-            self.config = json.load(f)
-
-        # self.container = QGridLayout(self)
-        # self.procedures = {}
-        # self.funcs = []
-        # self.i = 0
-
-        # # Procedures
-        # for i, name in enumerate(self.config):
-        #     status = self.config[name]["Status"]
-        #     configs = self.config[name]["Configurations"]
-        #     procedure = Procedure(self, name, status, configs)
-        #     self.container.addWidget(procedure, i // 3, i % 3)
-        #     self.procedures[name] = procedure
-
-        # self.funcs = self.get_funcs()
-
-        # self.setContentsMargins(20, 20, 20, 20) 
-
-
-
-    def update(self, status: int, message: str):
-        if status == 0:
-            self.procedures[message].set_status(1) 
-            self.config[message]["Status"] = 1
-
-            with open("procedures_config.json", "w") as f:
-                json.dump(self.config, f, indent=2)
-
-            self.i += 1
-            if self.i < len(self.funcs):
-                self.procedures[self.funcs[self.i]].set_status(2)
-            else:
-                self.i = 0
-                self.parent.stop()
-        else:
-            self.procedures[message].set_status(0)
-            self.i = 0
-            self.parent.stop() 
-
-    def start(self):
-        with open("procedures_config.json", "r") as f:
-            self.config = json.load(f)
-
-        self.funcs = self.get_funcs()
-        if self.funcs:
-            self.procedures[self.funcs[0]].set_status(2)
-
-    def reset(self):
-        for name, procedure in self.procedures.items():
-            self.config[name]["Status"] = 0
-            procedure.set_status(0)
-
-        with open("procedures_config.json", "w") as f:
-            json.dump(self.config, f, indent=2)       
-
-    def get_funcs(self):
-        funcs = []
-        for name in self.config:
-            if self.config[name]["Status"] == 0:
-                funcs.append(name)
-        return funcs
-
 class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
@@ -198,66 +130,6 @@ class Display(QWidget):
         super().__init__(parent)
         self.name = name
 
-        # Colored Header
-        color = QColor.fromHslF(0.6, 0.45, 0.3)
-        self.header = QLabel(self.name, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.header.setStyleSheet(f"""
-            QLabel {{
-                background-color: #495057;
-                color: white;
-                border: none;
-                border-radius: 0px;
-                font-weight: bold;
-                font-size: 14px;
-                padding: 12px 16px;
-            }}
-        """)
-
-        # Configurations
-        # self.config = QGridLayout()
-        # for i, (key, data) in enumerate(configs.items()):
-
-        #     cfg = QLabel(key)
-        #     cfg.setStyleSheet(f"""
-        #     QLabel {{
-        #         background-color: #6c757d;
-        #         color: white;
-        #         border: none;
-        #         border-radius: 0px;
-        #         font-size: 12px;
-        #         padding: 4px 8px;
-        #     }}
-        #     """)
-
-        #     value = QLineEdit(str(data["Value"]), alignment=Qt.AlignmentFlag.AlignRight)
-        #     value.setStyleSheet(f"""
-        #     QLineEdit {{
-        #         background-color: white;
-        #         color: black;
-        #         border: 1px solid #6c757d;
-        #         border-radius: 0px;
-        #         font-size: 12px;
-        #         padding: 4px 8px;
-        #     }}
-        #     """)
-        #     value.setFixedWidth(64)
-            
-        #     unit = QLabel(data["Unit"])
-        #     unit.setStyleSheet(f"""
-        #     QLabel {{
-        #         background-color: #6c757d;
-        #         color: white;
-        #         border: none;
-        #         border-radius: 0px;
-        #         font-size: 12px;
-        #         padding: 4px 8px;
-        #     }}
-        #     """)
-        
-        #     self.config.addWidget(cfg, i, 0)
-        #     self.config.addWidget(value, i, 1)
-        #     self.config.addWidget(unit, i, 2)
-
         self.button = QPushButton(self.name)
         self.button.setStyleSheet("""
             QPushButton {
@@ -266,7 +138,7 @@ class Display(QWidget):
                 border: 1px solid #545b62;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 14px;
+                font-size: 16px;
                 padding: 8px 16px;
             }
             QPushButton:hover {
@@ -285,15 +157,12 @@ class Display(QWidget):
                 color: white;
                 border: none;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 14px;
                 padding: 8px 16px;
             }}
         """)
 
-
         self.container = QVBoxLayout(self)
-        # self.container.addWidget(self.header)
-        # self.container.addLayout(self.config)
         self.container.addWidget(self.button)
         self.container.addWidget(self.display)
         self.container.setSpacing(0)
@@ -313,7 +182,7 @@ class Button(QWidget):
                 color: #ffffff;
                 border: 1px solid #545b62;
                 border-radius: 0px;
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: bold;
                 padding: 8px 16px;
             }
@@ -353,15 +222,13 @@ class Control(QWidget):
 
         # Procedures 
         self.procedures = procedures.Procedures(self)
-
-        # Status
-        # self.status = Status(self)
-        # self.procedures.procedures_worker.reply.connect(self.status.update)
-
+    
         # Displays
         self.conditioning = Display(self, "Conditioning")
         self.load_samples = Display(self, "Load Samples")
         self.reaction = Display(self, "Reaction")
+        self.categories = {"Conditioning": self.conditioning, "Load Samples": self.load_samples, "Reaction": self.reaction}
+        self.name = None
 
         self.conditioning.button.clicked.connect(lambda: self.start(self.conditioning.name))
         self.load_samples.button.clicked.connect(lambda: self.start(self.load_samples.name))
@@ -369,7 +236,6 @@ class Control(QWidget):
 
         self.displays = QVBoxLayout()
         self.displays.setSpacing(0)
-        self.displays.setContentsMargins(20, 20, 20, 20)
         self.displays.addWidget(self.conditioning)
         self.displays.addWidget(self.load_samples)
         self.displays.addWidget(self.reaction)
@@ -379,13 +245,12 @@ class Control(QWidget):
         self.stop_btn = Button(self, "Stop")
         self.reset_btn = Button(self, "Reset")
 
-        self.start_btn.button.clicked.connect(self.start)
+        self.start_btn.button.clicked.connect(lambda: self.start())
         self.stop_btn.button.clicked.connect(self.stop)
         self.reset_btn.button.clicked.connect(self.reset)
 
         self.buttons = QHBoxLayout()
-        self.buttons.setSpacing(20)
-        self.buttons.setContentsMargins(20, 20, 20, 20)
+        self.buttons.setSpacing(0)
         self.buttons.addWidget(self.start_btn)
         self.buttons.addWidget(self.stop_btn)
         self.buttons.addWidget(self.reset_btn)
@@ -394,6 +259,7 @@ class Control(QWidget):
         self.overview = QWidget(self)
         self.overview.setFixedSize(500, 400)
         self.container = QVBoxLayout(self.overview)
+        self.container.setContentsMargins(20, 20, 20, 20)
         self.container.addLayout(self.buttons)
         self.container.addLayout(self.displays)
 
@@ -401,14 +267,17 @@ class Control(QWidget):
         self.grid = QGridLayout(self)
         self.grid.addWidget(self.schematic, 0, 0)
         self.grid.addWidget(self.graph, 0, 1)
-        # self.grid.addWidget(self.status, 1, 0)
         self.grid.addWidget(self.table, 1, 1)
         self.grid.addWidget(self.overview, 1, 0, alignment=Qt.AlignmentFlag.AlignRight)
 
     def start(self, name=None):
-        self.procedures.start(name)
+        self.name = name
+        self.procedures.start(self.name)
 
     def stop(self):
+        for obj in self.categories.values():
+            obj.set_text("")
+        
         self.schematic.stop()
         self.procedures.stop()
 
@@ -417,8 +286,32 @@ class Control(QWidget):
         self.peltier_device.stop()
 
     def reset(self):
-        self.status.reset()
         self.graph.reset()
+        for r in self.schematic.reactors:
+            r.offset = 0
+        for obj in self.categories.values():
+            obj.set_text("")
+
+    def set_stopped(self, procedure: str, message: str):
+        if self.name is None:
+            for key, funcs in self.config.items():
+                for func in funcs.keys():
+                    if func == procedure:
+                        if message == "":
+                            self.categories[key].set_text("Completed")
+                        else:
+                            self.categories[key].set_text("")
+        else:
+            self.categories[self.name].set_text("")
+
+    def set_running(self, procedure: str):
+        if self.name is None:
+            for key, funcs in self.config.items():
+                for func in funcs.keys():
+                    if func == procedure:
+                        self.categories[key].set_text("Running " + procedure)
+        else:
+            self.categories[self.name].set_text("Running " + procedure)
 
     def closeEvent(self, event):
         self.schematic.closeEvent(event)

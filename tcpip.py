@@ -42,13 +42,13 @@ class TcpIp:
     def get_n(self, index: int = 1) -> float:
         return self.send_command(f"?PCT {index} N")
 
-    def trap_status(self) -> str:
+    def get_process_status(self) -> str:
         return self.send_command("SEQ")
 
-    def trap_on(self) -> str:
+    def start_processing(self) -> str:
         return self.send_command("SEQON")
 
-    def trap_off(self) -> str:
+    def stop_processing(self) -> str:
         return self.send_command("SEQOFF")
 
     def get_status(self) -> str:
@@ -61,7 +61,7 @@ class TcpIp:
         return self.send_command("SLEEPON")
 
 if __name__ == "__main__":
-    tcpip = TCPIP()
+    tcpip = TcpIp()
 
     print(tcpip.get_name(1))
     print(tcpip.get_weight(1))

@@ -49,7 +49,7 @@
       },
       "H2 Cycle Duration": {
         "Value": 10,
-        "Default": 300,
+        "Default": 60,
         "Unit": "s"
       }
     },
