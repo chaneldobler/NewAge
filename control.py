@@ -227,8 +227,13 @@ class Control(QWidget):
         self.conditioning = Display(self, "Conditioning")
         self.load_samples = Display(self, "Load Samples")
         self.reaction = Display(self, "Reaction")
-        self.categories = {"Conditioning": self.conditioning, "Load Samples": self.load_samples, "Reaction": self.reaction}
-        self.name = None
+        self.separate = Display(self, "Separate")
+        self.stages = {
+            "Conditioning": self.conditioning, 
+            "Load Samples": self.load_samples, 
+            "Reaction": self.reaction, 
+            "Separate": self.separate
+        } # Could be prettier
 
         self.conditioning.button.clicked.connect(lambda: self.start(self.conditioning.name))
         self.load_samples.button.clicked.connect(lambda: self.start(self.load_samples.name))
@@ -257,7 +262,7 @@ class Control(QWidget):
 
         # Overview
         self.overview = QWidget(self)
-        self.overview.setFixedSize(500, 400)
+        self.overview.setFixedSize(400, 400)
         self.container = QVBoxLayout(self.overview)
         self.container.setContentsMargins(20, 20, 20, 20)
         self.container.addLayout(self.buttons)
@@ -270,14 +275,10 @@ class Control(QWidget):
         self.grid.addWidget(self.table, 1, 1)
         self.grid.addWidget(self.overview, 1, 0, alignment=Qt.AlignmentFlag.AlignRight)
 
-    def start(self, name=None):
-        self.name = name
-        self.procedures.start(self.name)
+    def start(self, stage=None):
+        self.procedures.start(stage)
 
     def stop(self):
-        for obj in self.categories.values():
-            obj.set_text("")
-        
         self.schematic.stop()
         self.procedures.stop()
 
@@ -288,30 +289,13 @@ class Control(QWidget):
     def reset(self):
         self.graph.reset()
         for r in self.schematic.reactors:
-            r.offset = 0
-        for obj in self.categories.values():
+            r.reset()
+        for obj in self.stages.values():
             obj.set_text("")
 
-    def set_stopped(self, procedure: str, message: str):
-        if self.name is None:
-            for key, funcs in self.config.items():
-                for func in funcs.keys():
-                    if func == procedure:
-                        if message == "":
-                            self.categories[key].set_text("Completed")
-                        else:
-                            self.categories[key].set_text("")
-        else:
-            self.categories[self.name].set_text("")
-
-    def set_running(self, procedure: str):
-        if self.name is None:
-            for key, funcs in self.config.items():
-                for func in funcs.keys():
-                    if func == procedure:
-                        self.categories[key].set_text("Running " + procedure)
-        else:
-            self.categories[self.name].set_text("Running " + procedure)
+    def set_running(self, stage: str, message: str):
+        if stage in self.stages.keys():
+            self.stages[stage].set_text(message)
 
     def closeEvent(self, event):
         self.schematic.closeEvent(event)

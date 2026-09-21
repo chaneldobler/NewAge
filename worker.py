@@ -4,9 +4,8 @@ import time
 
 class Worker(QThread):
     update = Signal(list)
-    begin = Signal(str)
+    message = Signal(str, str)
     prompt = Signal(str)
-    end = Signal(str, str)
 
     def __init__(self, dt=1.0, func=None, *args):
         super().__init__()

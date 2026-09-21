@@ -89,6 +89,10 @@ class Reactor(QWidget):
             }}
         """)
 
+    def reset(self):
+        self.offset = 0
+        self.slope = 1
+
     def get_value(self):
         return self.slope*(self.value - self.offset)
 

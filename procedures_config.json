@@ -1,108 +1,103 @@
 {
   "Conditioning": {
-    "Oxidize Iron": {
-      "Conditioning Temperature": {
-        "Value": 50,
-        "Default": 500,
-        "Unit": "bar"
-      },
-      "Iron Preheating Duration": {
-        "Value": 10,
-        "Default": 300,
-        "Unit": "s"
-      }
+    "Conditioning Oven Temperature": {
+      "Value": 50,
+      "Default": 500,
+      "Unit": "°C"
     },
-    "Clean Trap": {
-      "Clean Trap Duration": {
-        "Value": 10,
-        "Default": 60,
-        "Unit": "s"
-      },
-      "Clean Trap Temperature": {
-        "Value": 10,
-        "Default": 450,
-        "Unit": "°C"
-      },
-      "Trap Cooling Temperature": {
-        "Value": 50,
-        "Default": 10,
-        "Unit": "°C"
-      }
+    "Preheating Iron Duration": {
+      "Value": 10,
+      "Default": 300,
+      "Unit": "s"
     },
-    "Leak Test": {
-      "Leak Test Duration": {
-        "Value": 10,
-        "Default": 300,
-        "Unit": "s"
-      },
-      "Pressure Leak Limit": {
-        "Value": 0.01,
-        "Default": 0.006,
-        "Unit": "bar"
-      }
+    "Trap Heating Temperature": {
+      "Value": 10,
+      "Default": 450,
+      "Unit": "°C"
     },
-    "H2 Cleaning": {
-      "H2 Cycle Repetitions": {
-        "Value": 1,
-        "Default": 1,
-        "Unit": ""
-      },
-      "H2 Cycle Duration": {
-        "Value": 10,
-        "Default": 60,
-        "Unit": "s"
-      }
+    "Clean Trap Duration": {
+      "Value": 10,
+      "Default": 60,
+      "Unit": "s"
     },
-    "Correct Offset": {}
+    "Leak Test Duration": {
+      "Value": 10,
+      "Default": 300,
+      "Unit": "s"
+    },
+    "Leak Pressure Limit": {
+      "Value": 0.01,
+      "Default": 0.006,
+      "Unit": "bar"
+    },
+    "H2 Cycle Repetitions": {
+      "Value": 1,
+      "Default": 3,
+      "Unit": ""
+    },
+    "H2 Cycle Duration": {
+      "Value": 10,
+      "Default": 300,
+      "Unit": "s"
+    }
   },
   "Load Samples": {
-    "Load Samples": {
-      "Trap Vacuum Duration": {
-        "Value": 10,
-        "Default": 10,
-        "Unit": "s"
-      },
-      "Trap Release Duration": {
-        "Value": 10,
-        "Default": 10,
-        "Unit": "s"
-      },
-      "Trap Heating Temperature": {
-        "Value": 10,
-        "Default": 420,
-        "Unit": "°C"
-      },
-      "Trap Cooling Temperature": {
-        "Value": 50,
-        "Default": 10,
-        "Unit": "°C"
-      },
-      "CO2 Pressure": {
-        "Value": 100,
-        "Default": 100,
-        "Unit": "bar"
-      }
+    "Trap Vacuum Duration": {
+      "Value": 10,
+      "Default": 10,
+      "Unit": "s"
+    },
+    "Trap Release Duration": {
+      "Value": 10,
+      "Default": 10,
+      "Unit": "s"
+    },
+    "Trap Preheating Temperature": {
+      "Value": 10,
+      "Default": 420,
+      "Unit": "°C"
+    },
+    "Trap Heating Temperature": {
+      "Value": 10,
+      "Default": 450,
+      "Unit": "°C"
+    },
+    "Clean Trap Duration": {
+      "Value": 10,
+      "Default": 60,
+      "Unit": "s"
+    },
+    "Trap Cooling Temperature": {
+      "Value": 50,
+      "Default": 50,
+      "Unit": "°C"
+    },
+    "CO2 Pressure Scaling": {
+      "Value": 2.3,
+      "Default": 2.3,
+      "Unit": ""
     }
   },
   "Reaction": {
-    "Reaction": {
-      "Reaction Duration": {
-        "Value": 10,
-        "Default": 120,
-        "Unit": "s"
-      },
-      "Pressure End Limit": {
-        "Value": 0.18,
-        "Default": 0.18,
-        "Unit": "bar"
-      }
+    "Reaction Temperature": {
+      "Value": 50,
+      "Default": 580,
+      "Unit": "°C"
     },
-    "Remove Water": {
-      "Remove Water Duration": {
-        "Value": 10,
-        "Default": 420,
-        "Unit": "s"
-      }
+    "Reaction Duration": {
+      "Value": 10,
+      "Default": 7200,
+      "Unit": "s"
+    },
+    "End Pressure Limit": {
+      "Value": 2.0,
+      "Default": 0.18,
+      "Unit": "bar"
+    },
+    "Water Removal Duration": {
+      "Value": 10,
+      "Default": 420,
+      "Unit": "s"
     }
   }
 }
