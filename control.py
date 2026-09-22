@@ -235,9 +235,9 @@ class Control(QWidget):
             "Separate": self.separate
         } # Could be prettier
 
-        self.conditioning.button.clicked.connect(lambda: self.start(self.conditioning.name))
-        self.load_samples.button.clicked.connect(lambda: self.start(self.load_samples.name))
-        self.reaction.button.clicked.connect(lambda: self.start(self.reaction.name))
+        self.conditioning.button.clicked.connect(lambda: self.procedures.start([self.conditioning.name]))
+        self.load_samples.button.clicked.connect(lambda: self.procedures.start([self.load_samples.name]))
+        self.reaction.button.clicked.connect(lambda: self.procedures.start([self.reaction.name]))
 
         self.displays = QVBoxLayout()
         self.displays.setSpacing(0)
@@ -250,7 +250,7 @@ class Control(QWidget):
         self.stop_btn = Button(self, "Stop")
         self.reset_btn = Button(self, "Reset")
 
-        self.start_btn.button.clicked.connect(lambda: self.start())
+        self.start_btn.button.clicked.connect(lambda: self.procedures.start([self.conditioning.name, self.load_samples.name, self.reaction.name]))
         self.stop_btn.button.clicked.connect(self.stop)
         self.reset_btn.button.clicked.connect(self.reset)
 
@@ -275,8 +275,8 @@ class Control(QWidget):
         self.grid.addWidget(self.table, 1, 1)
         self.grid.addWidget(self.overview, 1, 0, alignment=Qt.AlignmentFlag.AlignRight)
 
-    def start(self, stage=None):
-        self.procedures.start(stage)
+    # def start(self, stages):
+    #     self.procedures.start(stages)
 
     def stop(self):
         self.schematic.stop()

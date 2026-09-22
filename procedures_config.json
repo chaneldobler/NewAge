@@ -10,16 +10,6 @@
       "Default": 300,
       "Unit": "s"
     },
-    "Trap Heating Temperature": {
-      "Value": 10,
-      "Default": 450,
-      "Unit": "°C"
-    },
-    "Clean Trap Duration": {
-      "Value": 10,
-      "Default": 60,
-      "Unit": "s"
-    },
     "Leak Test Duration": {
       "Value": 10,
       "Default": 300,
@@ -52,24 +42,9 @@
       "Default": 10,
       "Unit": "s"
     },
-    "Trap Preheating Temperature": {
-      "Value": 10,
-      "Default": 420,
-      "Unit": "°C"
-    },
     "Trap Heating Temperature": {
       "Value": 10,
-      "Default": 450,
-      "Unit": "°C"
-    },
-    "Clean Trap Duration": {
-      "Value": 10,
-      "Default": 60,
-      "Unit": "s"
-    },
-    "Trap Cooling Temperature": {
-      "Value": 50,
-      "Default": 50,
+      "Default": 420,
       "Unit": "°C"
     },
     "CO2 Pressure Scaling": {
@@ -98,6 +73,23 @@
       "Value": 10,
       "Default": 420,
       "Unit": "s"
+    }
+  },
+  "Separate": {
+    "Clean Trap Temperature": {
+      "Value": 10,
+      "Default": 450,
+      "Unit": "°C"
+    },
+    "Clean Trap Duration": {
+      "Value": 10,
+      "Default": 60,
+      "Unit": "s"
+    },
+    "Trap Cooling Temperature": {
+      "Value": 50,
+      "Default": 10,
+      "Unit": "°C"
     }
   }
 }
