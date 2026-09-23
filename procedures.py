@@ -35,11 +35,11 @@ class Procedures:
         self.reactors_worker.start()
 
         self.separate_worker = worker.Worker()
-        # self.separate_worker.message.connect(self.parent.set_running)
         # self.separate_worker.prompt.connect(self.parent.set_text)
         self.separate_worker.start()
 
         self.schematic = self.parent.schematic
+        self.talbe = self.parent.table
 
         # Valves
         self.valve_reactors = self.schematic.valve_reactors
@@ -152,9 +152,11 @@ class Procedures:
 
     # ----- Independent Procedures -----
     def process_runin(self):
+        self.reactors_worker.message.emit("Separate", "Started Process Runin")
         for _ in self.reactors:
             while self.tcpip.get_status() != "STS READY":
                 if not self.running:
+                    self.reactors_worker.message.emit("Separate", "")
                     return
                 time.sleep(1)
 
@@ -165,9 +167,13 @@ class Procedures:
             if name.split()[0].lower() == "runin":
                 self.tcpip.start()
 
+        self.reactors_worker.message.emit("Separate", "")
+
     def cool_trap(self, temperature):
+        self.reactors_worker.message.emit("Separate", "Started Trap Cooling")
         while self.cooling:
             if not self.running:
+                self.reactors_worker.message.emit("Separate", "")
                 return
             if not self.valve_vortex.active and self.trap.value is not None and self.trap.value > temperature:
                 self.smc_device.set([self.valve_vortex.id], 1)
@@ -175,22 +181,28 @@ class Procedures:
                 self.smc_device.set([self.valve_vortex.id], 0)
             time.sleep(1)
         self.smc_device.set([self.valve_vortex.id], 0)
+        self.reactors_worker.message.emit("Separate", "")
 
     def clean_trap(self, temperature, duration):
+        self.reactors_worker.message.emit("Separate", "Started Clean Trap")
         self.start_heaters([self.trap], temperature)
         self.smc_device.set([self.valve_sampling.id], 1)
         while self.trap.value is not None and self.trap.value < temperature:
             if not self.running:
+                self.reactors_worker.message.emit("Separate", "")
                 return
             time.sleep(1)
         status = self.wait(duration)
         if status:
+            self.reactors_worker.message.emit("Separate", "")
             return 
         self.stop_heaters([self.trap])
         status = self.wait(20)
         if status:
+            self.reactors_worker.message.emit("Separate", "")
             return 
         self.smc_device.set([self.valve_sampling.id], 0)
+        self.reactors_worker.message.emit("Separate", "")
 
     # ----- Conditioning Procedures ----- 
     def oxidize_iron(self, temperature, duration):
@@ -348,17 +360,28 @@ class Procedures:
         # self.reactors_worker.message.emit("Load Samples", "Started Cleaning Trap")
         self.separate_worker.request(self.clean_trap)
 
+        if 1 <= reactor.id <= 5:
+            id = 0
+        elif 6 <= reactor.id <= 10:
+            id = 1
+        
         pressure_CO2 = self.get_average_pressure()
+        self.talbe.set_entry(pressure_CO2, reactor.id - 1, 2)
+        print("pressure C02" + str(pressure_CO2))
         while reactor.value is not None and reactor.get_value() > 0.57:
             if not self.running:
                 return -1
             self.smc_device.set([self.valve_vacuum.id], 1)
             time.sleep(1)
             self.smc_device.set([self.valve_vacuum.id], 0)
-            self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 1)
+            # self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 1)
+            self.smc_device.set([self.valve_lines[id].id], 1)
             time.sleep(1)
-            self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 0)
+            # self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 0)
+            self.smc_device.set([self.valve_lines[id].id], 0)
         pressure_CO2_final = self.get_average_pressure()
+        self.talbe.set_entry(pressure_CO2_final, reactor.id - 1, 3)
+        print("pressure CO2 final: " + str(pressure_CO2_final))
 
         self.smc_device.set([self.valve_reactors[reactor.id - 1].id, self.valve_h2.id], 1)
         while reactor.value is not None and reactor.get_value() > pressure_CO2_final*(scaling + 1)-0.2:
@@ -372,13 +395,18 @@ class Procedures:
             self.smc_device.set([self.valve_h2.id], 1)
             time.sleep(1)
             self.smc_device.set([self.valve_h2.id], 0)
-            self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 1)
+            # self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 1)
+            self.smc_device.set([self.valve_lines[id].id], 1)
             time.sleep(1)
-            self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 0)       
+            # self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 0)       
+            self.smc_device.set([self.valve_lines[id].id], 0)
+        self.smc_device.set([self.valve_lines[id].id], 1)
         pressure_H2 = self.get_average_pressure()
+        self.talbe.set_entry(pressure_H2, reactor.id - 1, 4)
+        print("pressure H2: " + str(pressure_H2))
         return 0
 
-    def sampling(self, index):
+    def sampling(self, reactor, index):
         while self.trap.value is not None and self.trap.value > 50:
             if not self.running:
                 return -1
@@ -406,7 +434,9 @@ class Procedures:
         self.smc_device.set([self.valve_sampling.id], 0)
         self.tcpip.stop_processing()
         c, n = self.tcpip.get_c(index), self.tcpip.get_n(index)
-        print(c + " " + n)
+        pressure = self.get_average_pressure()
+        self.table.set_entry(pressure, reactor.id - 1, 5)
+        print("C%: " + str(c) + ", N%: " + str(n))
         return 0
 
     def load_samples(self):
@@ -441,12 +471,14 @@ class Procedures:
                 time.sleep(1)
             index = self.tcpip.get_index()
             name, weight = self.tcpip.get_name(index), self.tcpip.get_weight(index)
-            print(str(index) + " " + name + " " + str(weight))
+            self.table.set_entry(name, self.reactors[i].id - 1, 0)
+            self.table.set_entry(weight, self.reactors[i].id - 1, 1)
+            print("Index: " + str(index) + ", Name: " + name + ", Weight: " + str(weight))
 
             self.trap_cooling = True
             self.separate_worker.request(self.cool_trap, trap_cooling_temp)
             self.reactors_worker.message.emit("Load Samples", "Started Sampling")
-            status = self.sampling(index)
+            status = self.sampling(self.reactors[i], index)
             if status:
                 self.reactors_worker.message.emit("Load Samples", "Stopped")
                 self.trap_cooling = False
@@ -497,7 +529,7 @@ class Procedures:
 
         self.smc_device.set([self.valve_lift.id], 1)
 
-        self.reactors_worker.message.emit("Reaction", "Running Reaction")
+        self.reactors_worker.message.emit("Reaction", "Started Reaction")
         self.set_peltiers(1)
         self.start_heaters(self.ovens, reaction_temp)
         while any(o.value is not None and o.value < reaction_temp for o in self.ovens):
@@ -510,7 +542,7 @@ class Procedures:
             if not self.running:
                 self.reactors_worker.message.emit("Reaction", "Stopped")
                 return
-            self.reactors_worker.message.emit("Reaction", "Reaction Time Left: " + str(int(end_time - time.time())))
+            self.reactors_worker.message.emit("Reaction", "Reaction Time Left: " + str(int(end_time - time.time())) + "s")
             time.sleep(1)
         self.smc_device.set([self.valve_lift.id], 0)
         self.stop_heaters(self.ovens)
@@ -519,7 +551,7 @@ class Procedures:
             self.reactors_worker.message.emit("Reaction", "Stopped")
             return 
 
-        self.reactors_worker.message.emit("Reaction", "Running Remove Water")
+        self.reactors_worker.message.emit("Reaction", "Started Remove Water")
         status = self.remove_water(water_removal_dur)
         if status:
             self.reactors_worker.message.emit("Reaction", "Stopped")

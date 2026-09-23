@@ -74,9 +74,12 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.model = QStandardItemModel(2, 2)
-        self.model.setHorizontalHeaderLabels(["Sample Name", "Weight [mg]", "CO2", "CO2 fin", "CO2 + H2", "p end"])
-        self.model.setVerticalHeaderLabels([f"Reactor {i+1}" for i in range(10)])
+        self.headers = ["Sample Name", "Weight [mg]", "CO2", "CO2 fin", "CO2 + H2", "p end"]
+        self.reactors = [f"Reactor {i+1}" for i in range(10)]
+
+        self.model = QStandardItemModel(len(self.reactors), len(self.headers))
+        self.model.setHorizontalHeaderLabels(self.headers)
+        self.model.setVerticalHeaderLabels(self.reactors)
 
         self.view = QTableView()
         self.view.setModel(self.model)
@@ -125,6 +128,15 @@ class Table(QWidget):
         self.setFixedSize(1000, 400)
         self.setContentsMargins(20, 20, 20, 20)
 
+    def set_entry(self, text, row, col):
+        item = QStandardItem(str(text))
+        self.model.setItem(row, col, item)
+
+    def clear(self):
+        for row in range(self.model.rowCount()):
+            for col in range(self.model.columnCount()):
+                self.model.setItem(row, col, None)
+
 class Display(QWidget):
     def __init__(self, parent, name):
         super().__init__(parent)
@@ -138,8 +150,8 @@ class Display(QWidget):
                 border: 1px solid #545b62;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 16px;
-                padding: 8px 16px;
+                font-size: 12px;
+                padding: 12px 16px;
             }
             QPushButton:hover {
                 background-color: #5c636a;
@@ -157,7 +169,7 @@ class Display(QWidget):
                 color: white;
                 border: none;
                 border-radius: 0px;
-                font-size: 14px;
+                font-size: 12px;
                 padding: 8px 16px;
             }}
         """)
@@ -182,9 +194,9 @@ class Button(QWidget):
                 color: #ffffff;
                 border: 1px solid #545b62;
                 border-radius: 0px;
-                font-size: 16px;
+                font-size: 12px;
                 font-weight: bold;
-                padding: 8px 16px;
+                padding: 8px 12px;
             }
             QPushButton:hover {
                 background-color: #5c636a;
@@ -228,6 +240,17 @@ class Control(QWidget):
         self.load_samples = Display(self, "Load Samples")
         self.reaction = Display(self, "Reaction")
         self.separate = Display(self, "Separate")
+        self.separate.button.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: #ffffff;
+                border: 0px;
+                border-radius: 0px;
+                font-size: 12px;
+                font-weight: bold;
+                padding: 12px 16px;
+            }
+        """)
         self.stages = {
             "Conditioning": self.conditioning, 
             "Load Samples": self.load_samples, 
@@ -241,9 +264,11 @@ class Control(QWidget):
 
         self.displays = QVBoxLayout()
         self.displays.setSpacing(0)
+        self.displays.setContentsMargins(0, 0, 0, 0)
         self.displays.addWidget(self.conditioning)
         self.displays.addWidget(self.load_samples)
         self.displays.addWidget(self.reaction)
+        self.displays.addWidget(self.separate)
 
         # Buttons
         self.start_btn = Button(self, "Start")
@@ -255,15 +280,15 @@ class Control(QWidget):
         self.reset_btn.button.clicked.connect(self.reset)
 
         self.buttons = QHBoxLayout()
-        self.buttons.setSpacing(0)
-        self.buttons.addWidget(self.start_btn)
-        self.buttons.addWidget(self.stop_btn)
-        self.buttons.addWidget(self.reset_btn)
+        # self.buttons.setSpacing(0)
+        self.buttons.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignTop)
+        self.buttons.addWidget(self.stop_btn, alignment=Qt.AlignmentFlag.AlignTop)
+        self.buttons.addWidget(self.reset_btn, alignment=Qt.AlignmentFlag.AlignTop)
 
         # Overview
         self.overview = QWidget(self)
-        self.overview.setFixedSize(400, 400)
-        self.container = QVBoxLayout(self.overview)
+        self.overview.setFixedSize(700, 400)
+        self.container = QHBoxLayout(self.overview)
         self.container.setContentsMargins(20, 20, 20, 20)
         self.container.addLayout(self.buttons)
         self.container.addLayout(self.displays)
@@ -287,6 +312,7 @@ class Control(QWidget):
         self.peltier_device.stop()
 
     def reset(self):
+        self.table.clear()
         self.graph.reset()
         for r in self.schematic.reactors:
             r.reset()

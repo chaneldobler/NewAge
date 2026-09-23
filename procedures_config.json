@@ -1,32 +1,32 @@
 {
   "Conditioning": {
     "Conditioning Oven Temperature": {
-      "Value": 50,
+      "Value": 500,
       "Default": 500,
-      "Unit": "°C"
+      "Unit": "\u00b0C"
     },
     "Preheating Iron Duration": {
-      "Value": 10,
+      "Value": 300,
       "Default": 300,
       "Unit": "s"
     },
     "Leak Test Duration": {
-      "Value": 10,
+      "Value": 300,
       "Default": 300,
       "Unit": "s"
     },
     "Leak Pressure Limit": {
-      "Value": 0.01,
+      "Value": 0.006,
       "Default": 0.006,
       "Unit": "bar"
     },
     "H2 Cycle Repetitions": {
-      "Value": 1,
+      "Value": 3,
       "Default": 3,
       "Unit": ""
     },
     "H2 Cycle Duration": {
-      "Value": 10,
+      "Value": 300,
       "Default": 300,
       "Unit": "s"
     }
@@ -43,9 +43,9 @@
       "Unit": "s"
     },
     "Trap Heating Temperature": {
-      "Value": 10,
+      "Value": 420,
       "Default": 420,
-      "Unit": "°C"
+      "Unit": "\u00b0C"
     },
     "CO2 Pressure Scaling": {
       "Value": 2.3,
@@ -55,41 +55,41 @@
   },
   "Reaction": {
     "Reaction Temperature": {
-      "Value": 50,
+      "Value": 580,
       "Default": 580,
-      "Unit": "°C"
+      "Unit": "\u00b0C"
     },
     "Reaction Duration": {
-      "Value": 10,
+      "Value": 7200,
       "Default": 7200,
       "Unit": "s"
     },
     "End Pressure Limit": {
-      "Value": 2.0,
+      "Value": 0.18,
       "Default": 0.18,
       "Unit": "bar"
     },
     "Water Removal Duration": {
-      "Value": 10,
+      "Value": 420,
       "Default": 420,
       "Unit": "s"
     }
   },
   "Separate": {
     "Clean Trap Temperature": {
-      "Value": 10,
+      "Value": 450,
       "Default": 450,
-      "Unit": "°C"
+      "Unit": "\u00b0C"
     },
     "Clean Trap Duration": {
-      "Value": 10,
+      "Value": 60,
       "Default": 60,
       "Unit": "s"
     },
     "Trap Cooling Temperature": {
-      "Value": 50,
+      "Value": 10,
       "Default": 10,
-      "Unit": "°C"
+      "Unit": "\u00b0C"
     }
   }
 }
