@@ -1,10 +1,11 @@
 import socket
+import time
 
 class TcpIp:
     def __init__(self):
-        self.EA_IP = "10.236.4.222"
+        self.EA_IP = "10.236.4.193"
         self.PORT = 1984
-        self.TIMEOUT = 3.0
+        self.TIMEOUT = 6.0
 
     def send_command(self, command: str) -> str:
         try:
@@ -19,7 +20,9 @@ class TcpIp:
                 if data:
                     return data.decode('utf-8', errors='ignore').strip()
                 return ""
-                
+
+        # TODO if reply is none 
+        
         except socket.timeout:
             print(f"Timeout sending command: '{command}'")
             return ""
@@ -62,11 +65,7 @@ class TcpIp:
 
 if __name__ == "__main__":
     tcpip = TcpIp()
-
-    print(tcpip.get_name(1))
-    print(tcpip.get_weight(1))
-
-    print(tcpip.get_name(2))
-    print(tcpip.get_weight(2))
-
-    print(tcpip.get_status())
+    # tcpip.start_processing()
+    # print(tcpip.get_status())
+    print(tcpip.get_process_status())
+    # tcpip.sleep()

@@ -2,7 +2,7 @@ import sys
 import os
 import json
 from PySide6 import QtWidgets,QtCore
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout, QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QTableView, QHeaderView
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout, QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QTableView, QHeaderView, QMessageBox
 from PySide6.QtCore import QSize, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QPolygonF, QBrush, QStandardItem, QStandardItemModel
 import pyqtgraph as pg
@@ -45,7 +45,7 @@ class History(QWidget):
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.graph)
         self.setContentsMargins(20, 20, 20, 20)
-        self.setFixedSize(1000, 800)
+        self.setFixedSize(1500, 1200)
 
     def update(self, values):
         # History
@@ -94,7 +94,7 @@ class Table(QWidget):
                 background-color: #ffffff;
                 color: #000000;
                 border: none;
-                font-size: 13px;
+                font-size: 24px;
             }
             QTableView {
                 gridline-color: #e0e0e0;
@@ -125,7 +125,7 @@ class Table(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.view)
-        self.setFixedSize(1000, 400)
+        self.setFixedSize(1500, 600)
         self.setContentsMargins(20, 20, 20, 20)
 
     def set_entry(self, text, row, col):
@@ -150,7 +150,7 @@ class Display(QWidget):
                 border: 1px solid #545b62;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 12px 16px;
             }
             QPushButton:hover {
@@ -169,7 +169,7 @@ class Display(QWidget):
                 color: white;
                 border: none;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -194,7 +194,7 @@ class Button(QWidget):
                 color: #ffffff;
                 border: 1px solid #545b62;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 font-weight: bold;
                 padding: 8px 12px;
             }
@@ -246,7 +246,7 @@ class Control(QWidget):
                 color: #ffffff;
                 border: 0px;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 font-weight: bold;
                 padding: 12px 16px;
             }
@@ -287,7 +287,7 @@ class Control(QWidget):
 
         # Overview
         self.overview = QWidget(self)
-        self.overview.setFixedSize(700, 400)
+        self.overview.setFixedSize(1000, 600)
         self.container = QHBoxLayout(self.overview)
         self.container.setContentsMargins(20, 20, 20, 20)
         self.container.addLayout(self.buttons)
@@ -300,8 +300,18 @@ class Control(QWidget):
         self.grid.addWidget(self.table, 1, 1)
         self.grid.addWidget(self.overview, 1, 0, alignment=Qt.AlignmentFlag.AlignRight)
 
-    # def start(self, stages):
-    #     self.procedures.start(stages)
+    def prompt(self, message, event):
+        reply = QMessageBox.warning(
+            self,
+            "User Action Required",
+            message,
+            QMessageBox.StandardButton.Retry | 
+            QMessageBox.StandardButton.Ignore | 
+            QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Retry
+        )
+        self.procedures.prompt_reply = reply
+        event.set()
 
     def stop(self):
         self.schematic.stop()

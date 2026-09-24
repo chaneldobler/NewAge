@@ -33,7 +33,7 @@ class Reactor(QWidget):
                 color: black;
                 border: none;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 8px;
             }}
         """)
@@ -47,7 +47,7 @@ class Reactor(QWidget):
                 color: white;
                 border: 1px solid #545b62;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 4px 4px;
             }
             QPushButton:hover {
@@ -84,7 +84,7 @@ class Reactor(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -126,7 +126,7 @@ class Oven(QWidget):
                 color: black;
                 border: none;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 8px;
             }}
         """)
@@ -139,7 +139,7 @@ class Oven(QWidget):
                 color: white;
                 border: 1px solid #6c757d;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 4px 4px;
             }}
         """)
@@ -162,7 +162,7 @@ class Oven(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -209,7 +209,7 @@ class Trap(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -222,7 +222,7 @@ class Trap(QWidget):
                 color: black;
                 border: none;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 8px;
             }}
         """)
@@ -235,7 +235,7 @@ class Trap(QWidget):
                 color: white;
                 border: 1px solid #6c757d;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 4px 4px;
             }}
         """)
@@ -284,7 +284,7 @@ class Peltier(QWidget):
                 color: white;
                 border: 1px solid #6c757d;
                 border-radius: 0px;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 4px 4px;
             }}
         """)
@@ -306,7 +306,7 @@ class Peltier(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -334,7 +334,7 @@ class Valve(QWidget):
         # Toggle Button
         self.button = QPushButton(f"{self.id}")
         self.button.clicked.connect(self.request)
-        self.button.setFixedSize(24, 24)
+        self.button.setFixedSize(48, 48)
 
         # Button Container
         self.container = QVBoxLayout(self)
@@ -349,9 +349,9 @@ class Valve(QWidget):
                 background-color: {color};
                 color: #acacac;
                 border: none;
-                border-radius: 12px;
+                border-radius: 24px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
             }}
             QPushButton:hover {{
                 background-color: #5c636a;
@@ -387,7 +387,7 @@ class H2(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -410,7 +410,7 @@ class Vacuum(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 16px;
             }}
         """)
@@ -433,7 +433,7 @@ class EA(QWidget):
                 border: none;
                 border-radius: 0px;
                 font-weight: bold;
-                font-size: 12px;
+                font-size: 24px;
                 padding: 8px 4px;
             }}
         """)
@@ -458,7 +458,7 @@ class Schematic(QWidget):
         self.valve_trap = Valve(self, valves["Trap"])
         self.valve_h2 = Valve(self, valves["H2"])
         self.valve_vortex = Valve(self, valves["Vortex"])
-        self.valve_sampling = Valve(self, valves["He"])
+        self.valve_sampling = Valve(self, valves["Sampling"])
         self.valve_lift = Valve(self, valves["Lift"])
         self.valves = self.valve_reactors + self.valve_lines \
             + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_sampling, self.valve_lift]
@@ -486,7 +486,7 @@ class Schematic(QWidget):
         # ----- Layout ------
         self.grid = QGridLayout(self)
         self.setContentsMargins(20, 20, 20, 20)
-        self.setFixedSize(800, 800)
+        self.setFixedSize(1200, 1200)
 
         # Valves
         for i, v in enumerate(self.valve_reactors[:5]):

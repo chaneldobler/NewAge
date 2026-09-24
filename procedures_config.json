@@ -1,17 +1,22 @@
 {
   "Conditioning": {
     "Conditioning Oven Temperature": {
-      "Value": 500,
+      "Value": 50,
       "Default": 500,
       "Unit": "\u00b0C"
     },
     "Preheating Iron Duration": {
-      "Value": 300,
+      "Value": 10,
       "Default": 300,
       "Unit": "s"
     },
+    "Reactors Evacuation Duration": {
+      "Value": 10,
+      "Default": 180,
+      "Unit": "s"
+    },
     "Leak Test Duration": {
-      "Value": 300,
+      "Value": 10,
       "Default": 300,
       "Unit": "s"
     },
@@ -21,12 +26,12 @@
       "Unit": "bar"
     },
     "H2 Cycle Repetitions": {
-      "Value": 3,
+      "Value": 1,
       "Default": 3,
       "Unit": ""
     },
     "H2 Cycle Duration": {
-      "Value": 300,
+      "Value": 10,
       "Default": 300,
       "Unit": "s"
     }
@@ -43,12 +48,12 @@
       "Unit": "s"
     },
     "Trap Heating Temperature": {
-      "Value": 420,
+      "Value": 50,
       "Default": 420,
       "Unit": "\u00b0C"
     },
     "CO2 Pressure Scaling": {
-      "Value": 2.3,
+      "Value": 1,
       "Default": 2.3,
       "Unit": ""
     }
@@ -77,17 +82,17 @@
   },
   "Separate": {
     "Clean Trap Temperature": {
-      "Value": 450,
+      "Value": 50,
       "Default": 450,
       "Unit": "\u00b0C"
     },
     "Clean Trap Duration": {
-      "Value": 60,
+      "Value": 5,
       "Default": 60,
       "Unit": "s"
     },
     "Trap Cooling Temperature": {
-      "Value": 10,
+      "Value": 30,
       "Default": 10,
       "Unit": "\u00b0C"
     }

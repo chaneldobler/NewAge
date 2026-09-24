@@ -4,6 +4,9 @@ import json
 import numpy as np
 import worker
 import tcpip
+import threading
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtWidgets import QMessageBox
 
 # the expected units are the standard units: bar, s, celsius
 
@@ -19,7 +22,7 @@ class Procedures:
 
         self.running = False
         self.trap_cooling = False
-        # self.pause = False # TODO prompt
+        self.prompt_reply = None
         self.procedures = []
 
         self.tcpip = tcpip.TcpIp()
@@ -31,7 +34,7 @@ class Procedures:
 
         self.reactors_worker = worker.Worker()
         self.reactors_worker.message.connect(self.parent.set_running)
-        # self.reactors_worker.prompt.connect(self.parent.set_text)
+        self.reactors_worker.prompt.connect(self.parent.prompt)
         self.reactors_worker.start()
 
         self.separate_worker = worker.Worker()
@@ -39,7 +42,7 @@ class Procedures:
         self.separate_worker.start()
 
         self.schematic = self.parent.schematic
-        self.talbe = self.parent.table
+        self.table = self.parent.table
 
         # Valves
         self.valve_reactors = self.schematic.valve_reactors
@@ -160,24 +163,24 @@ class Procedures:
                     return
                 time.sleep(1)
 
-            index = self.tcpip.get_index()
+            index = int(self.tcpip.get_index().split()[1])
             name = self.tcpip.get_name(index)
             print(str(index) + " " + name)
 
-            if name.split()[0].lower() == "runin":
+            if name.split()[2].lower() == "runin":
                 self.tcpip.start()
 
         self.reactors_worker.message.emit("Separate", "")
 
     def cool_trap(self, temperature):
         self.reactors_worker.message.emit("Separate", "Started Trap Cooling")
-        while self.cooling:
+        while self.trap_cooling:
             if not self.running:
                 self.reactors_worker.message.emit("Separate", "")
                 return
-            if not self.valve_vortex.active and self.trap.value is not None and self.trap.value > temperature:
+            if not self.valve_vortex.active and self.trap.value is not None and self.trap.value > temperature + 5:
                 self.smc_device.set([self.valve_vortex.id], 1)
-            elif self.valve_vortex.active:
+            elif self.valve_vortex.active and self.trap.value is not None and self.trap.value > temperature - 5:
                 self.smc_device.set([self.valve_vortex.id], 0)
             time.sleep(1)
         self.smc_device.set([self.valve_vortex.id], 0)
@@ -197,10 +200,10 @@ class Procedures:
             self.reactors_worker.message.emit("Separate", "")
             return 
         self.stop_heaters([self.trap])
-        status = self.wait(20)
-        if status:
-            self.reactors_worker.message.emit("Separate", "")
-            return 
+        # status = self.wait(20)
+        # if status:
+        #     self.reactors_worker.message.emit("Separate", "")
+        #     return 
         self.smc_device.set([self.valve_sampling.id], 0)
         self.reactors_worker.message.emit("Separate", "")
 
@@ -218,32 +221,40 @@ class Procedures:
             return -1
         return 0
 
-    def leak_test(self, duration, limit):
-        self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 1)
-        status = self.wait(180)
-        if status:
-            return -1 
-        self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 0)
-        start = self.get_average_pressure()
-        if start == -1:
-            return -1
-        status = self.wait(duration)
-        if status:
-            return -1
-        end = self.get_average_pressure()  
-        if end == -1:
-            return -1
-        result = [
-            abs(start[i] - end[i]) \
-            if start[i] is not None and end[i] is not None \
-            else None for i in range(len(self.reactors))
-        ] 
-        if any(p is not None and p > limit for p in result):
-            self.parent.stop()
-            return -1
-        return 0
+    def leak_test(self, duration, limit, evac_duration):
+        while True:
+            self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 1)
+            status = self.wait(evac_duration)
+            if status:
+                return -1 
+            self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 0)
+            start = self.get_average_pressure()
+            if start == -1:
+                return -1
+            status = self.wait(duration)
+            if status:
+                return -1
+            end = self.get_average_pressure()  
+            if end == -1:
+                return -1
+            result = [
+                abs(start[i] - end[i]) \
+                if start[i] is not None and end[i] is not None \
+                else None for i in range(len(self.reactors))
+            ] 
+            if any(p is not None and p > limit for p in result):
+                wait = threading.Event()
+                self.reactors_worker.prompt.emit("Leak limit exceeded. How to proceed?", wait)
+                wait.wait()
+                if self.prompt_reply == QMessageBox.StandardButton.Retry:
+                    continue
+                elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
+                    self.parent.stop()
+                    return -1
+            return 0
 
-    def h2_cleaning(self, repetitions, duration):
+    def h2_cleaning(self, repetitions, duration, evac_duration):
+        self.smc_device.set([v.id for v in self.valve_reactors], 1)
         for _ in range(repetitions):
             self.smc_device.set([self.valve_h2.id], 1)
             while all(r.get_value() is not None and r.value < 0.8 for r in self.reactors):
@@ -254,17 +265,17 @@ class Procedures:
             status = self.wait(duration)
             if status:
                 return -1
-            self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 1)
-            status = self.wait(60)
+            self.smc_device.set([self.valve_vacuum.id], 1)
+            status = self.wait(evac_duration)
             if status:
                 return -1
-            self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 0)
+            self.smc_device.set([self.valve_vacuum.id], 0)
+        self.smc_device.set([v.id for v in self.valve_reactors], 0)
         return 0
 
     def correct_offset(self):
         for i, r in enumerate(self.reactors):
-            if i < len(offsets):
-                r.reset()
+            r.reset()
         self.smc_device.set([self.valve_vacuum.id] + [v.id for v in self.valve_reactors], 1)
         status = self.wait(20)
         if status:
@@ -282,6 +293,7 @@ class Procedures:
         cfg = self.config["Conditioning"]
         cond_oven_temp = cfg["Conditioning Oven Temperature"]["Value"]
         preheat_iron_dur = cfg["Preheating Iron Duration"]["Value"]
+        reactors_evac_dur = cfg["Reactors Evacuation Duration"]["Value"]
         leak_test_dur = cfg["Leak Test Duration"]["Value"]
         leak_press_limit = cfg["Leak Pressure Limit"]["Value"]
         h2_cycle_reps = cfg["H2 Cycle Repetitions"]["Value"]
@@ -302,6 +314,9 @@ class Procedures:
             self.parent.stop()
             self.reactors_worker.message.emit("Conditioning", "Stopped")
             return
+        # TODO check inputs are int and float not nonsense
+
+        self.smc_device.close_all()
 
         self.reactors_worker.message.emit("Conditioning", "Started Oxidize Iron")
         status = self.oxidize_iron(cond_oven_temp, preheat_iron_dur)
@@ -310,16 +325,16 @@ class Procedures:
             return
 
         self.separate_worker.request(self.clean_trap, clean_trap_temp, clean_trap_dur)
-        # self.separate_worker.request(self.process_runin)
+        self.separate_worker.request(self.process_runin)
 
         self.reactors_worker.message.emit("Conditioning", "Started Leak Test")
-        status = self.leak_test(leak_test_dur, leak_press_limit)
+        status = self.leak_test(leak_test_dur, leak_press_limit, reactors_evac_dur)
         if status:
             self.reactors_worker.message.emit("Conditioning", "Stopped")
             return
 
         self.reactors_worker.message.emit("Conditioning", "Started H2 Cleaning")
-        status = self.h2_cleaning(h2_cycle_reps, h2_cycle_dur)
+        status = self.h2_cleaning(h2_cycle_reps, h2_cycle_dur, reactors_evac_dur)
         if status:
             self.reactors_worker.message.emit("Conditioning", "Stopped")
             return
@@ -366,7 +381,7 @@ class Procedures:
             id = 1
         
         pressure_CO2 = self.get_average_pressure()
-        self.talbe.set_entry(pressure_CO2, reactor.id - 1, 2)
+        self.table.set_entry(pressure_CO2, reactor.id - 1, 2)
         print("pressure C02" + str(pressure_CO2))
         while reactor.value is not None and reactor.get_value() > 0.57:
             if not self.running:
@@ -380,7 +395,7 @@ class Procedures:
             # self.smc_device.set([self.valve_reactors[reactor.id - 1].id], 0)
             self.smc_device.set([self.valve_lines[id].id], 0)
         pressure_CO2_final = self.get_average_pressure()
-        self.talbe.set_entry(pressure_CO2_final, reactor.id - 1, 3)
+        self.table.set_entry(pressure_CO2_final, reactor.id - 1, 3)
         print("pressure CO2 final: " + str(pressure_CO2_final))
 
         self.smc_device.set([self.valve_reactors[reactor.id - 1].id, self.valve_h2.id], 1)
@@ -402,7 +417,7 @@ class Procedures:
             self.smc_device.set([self.valve_lines[id].id], 0)
         self.smc_device.set([self.valve_lines[id].id], 1)
         pressure_H2 = self.get_average_pressure()
-        self.talbe.set_entry(pressure_H2, reactor.id - 1, 4)
+        self.table.set_entry(pressure_H2, reactor.id - 1, 4)
         print("pressure H2: " + str(pressure_H2))
         return 0
 
@@ -413,23 +428,30 @@ class Procedures:
             time.sleep(1)
 
         self.tcpip.start()
-        while self.tcpip.get_status().split()[3] != "RUN":
+        while self.tcpip.get_status() != "STS RUN":
+            print(self.tcpip.get_status())
             if not self.running:
                 return -1
             time.sleep(1)       
 
         self.tcpip.start_processing()
-        while self.tcpip.get_process_status().split()[2] != "10":
-            if not self.running:
-                self.tcpip.stop_processing()
-                return -1
-            time.sleep(1)
 
-        self.smc_device.set([self.valve_sampling.id], 1)
-        while self.tcpip.get_process_status().split()[2] != "15":
+        status = self.tcpip.get_process_status()
+        while len(status.split()) < 3 or int(status.split()[2]) < 10:
+            print(status)
             if not self.running:
                 self.tcpip.stop_processing()
                 return -1
+            status = self.tcpip.get_process_status()
+            time.sleep(1)
+        self.smc_device.set([self.valve_sampling.id], 1)
+        status = self.tcpip.get_process_status()
+        while len(status.split()) < 3 or int(status.split()[2]) < 15:
+            print(status)
+            if not self.running:
+                self.tcpip.stop_processing()
+                return -1
+            status = self.tcpip.get_process_status()
             time.sleep(1)
         self.smc_device.set([self.valve_sampling.id], 0)
         self.tcpip.stop_processing()
@@ -465,14 +487,15 @@ class Procedures:
         i = 0
         while i < len(self.reactors):
             while self.tcpip.get_status() != "STS READY":
+                print(self.tcpip.get_status())
                 if not self.running:
                     self.reactors_worker.message.emit("Load Samples", "Stopped")
                     return
                 time.sleep(1)
-            index = self.tcpip.get_index()
+            index = int(self.tcpip.get_index().split()[1])
             name, weight = self.tcpip.get_name(index), self.tcpip.get_weight(index)
-            self.table.set_entry(name, self.reactors[i].id - 1, 0)
-            self.table.set_entry(weight, self.reactors[i].id - 1, 1)
+            self.table.set_entry(name.split()[2], self.reactors[i].id - 1, 0)
+            self.table.set_entry(weight.split()[2], self.reactors[i].id - 1, 1)
             print("Index: " + str(index) + ", Name: " + name + ", Weight: " + str(weight))
 
             self.trap_cooling = True
@@ -546,7 +569,7 @@ class Procedures:
             time.sleep(1)
         self.smc_device.set([self.valve_lift.id], 0)
         self.stop_heaters(self.ovens)
-        if any(r.get_value() is not None and r.get_value() > end_press_limit for r in self.reactors):
+        if any(r.get_value() is not None and r.get_value() > end_press_limit for r in self.reactors): # TODO how to handle
             self.parent.stop()
             self.reactors_worker.message.emit("Reaction", "Stopped")
             return 

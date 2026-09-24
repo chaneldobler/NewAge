@@ -15,7 +15,7 @@
     "Vacuum": 7,
     "Trap": 8,
     "H2": 9,
-    "He": 16,
+    "Sampling": 16,
     "Vortex": 17,
     "Lift": 19
   },
