@@ -179,7 +179,7 @@ class Procedures:
                 self.reactors_worker.message.emit("Separate", "")
                 return
             if not self.valve_vortex.active and self.trap.value is not None and self.trap.value > temperature + 5:
-                self.smc_device.set([self.valve_vortex.id], 1)
+                self.smc_device.set([self.valve_vortex.id], 1) # TODO check if connected
             elif self.valve_vortex.active and self.trap.value is not None and self.trap.value > temperature - 5:
                 self.smc_device.set([self.valve_vortex.id], 0)
             time.sleep(1)

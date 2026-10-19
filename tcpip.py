@@ -67,5 +67,5 @@ if __name__ == "__main__":
     tcpip = TcpIp()
     # tcpip.start_processing()
     # print(tcpip.get_status())
-    print(tcpip.get_process_status())
-    # tcpip.sleep()
+    # print(tcpip.get_process_status())
+    tcpip.sleep()
