@@ -60,22 +60,22 @@
   },
   "Reaction": {
     "Reaction Temperature": {
-      "Value": 580,
+      "Value": 50,
       "Default": 580,
       "Unit": "\u00b0C"
     },
     "Reaction Duration": {
-      "Value": 7200,
+      "Value": 10,
       "Default": 7200,
       "Unit": "s"
     },
     "End Pressure Limit": {
-      "Value": 0.18,
+      "Value": 1.2,
       "Default": 0.18,
       "Unit": "bar"
     },
     "Water Removal Duration": {
-      "Value": 420,
+      "Value": 10,
       "Default": 420,
       "Unit": "s"
     }

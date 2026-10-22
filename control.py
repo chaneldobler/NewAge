@@ -123,32 +123,83 @@ class Table(QWidget):
             for col in range(self.model.columnCount()):
                 self.model.setItem(row, col, None)
 
-class Display(QWidget):
-    def __init__(self, parent, name):
+class Display(QFrame):
+    def __init__(self, parent, label):
         super().__init__(parent)
         self.parent = parent
-        self.name = name
+        self.active = True
+        self.running = False
 
-        self.button = QPushButton(self.name)
-        self.display = QLabel()
+        self.color = QColor.fromHslF(0.75, 0.5, 0.45)
+        self.title = components.Title(label, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.button = QPushButton("Start")
 
         self.container = QVBoxLayout(self)
+        self.container.addWidget(self.title)
         self.container.addWidget(self.button)
-        self.container.addWidget(self.display)
 
-    def set_text(self, message: str):
-        self.display.setText(message)
+        self.update()
 
-class Button(QWidget):
-    def __init__(self, parent, name):
+    def update(self):
+        if not self.active:
+            color = "black"
+        elif not self.running:
+            color = "grey"
+        else:
+            color = self.color.name()
+        self.title.setStyleSheet(f"background-color: {color};")
+
+class Status(QFrame):
+    def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.name = name
 
-        self.button = QPushButton(self.name)
+        self.title = components.Title("Status", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display = QLabel("--", alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.container = QVBoxLayout(self)
-        self.container.addWidget(self.button)
+        self.container.addWidget(self.title)
+        self.container.addWidget(self.display)   
+
+    def set_text(self, stage: str, message: str):
+        self.display.setText(stage + ": " + message)
+
+class Reactors(QFrame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+
+        self.title = components.Title("Reactor Valves", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.btn_open = QPushButton("Open")
+        self.btn_close = QPushButton("Close")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0, 1, 2)
+        self.container.addWidget(self.btn_open, 1, 0)
+        self.container.addWidget(self.btn_close, 1, 1)
+
+class Panel(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setStyleSheet(components.styleSheet)
+
+        self.graphitization = Display(self, "Graphitization")
+        self.conditioning = Display(self, "Conditioning")
+        self.load_samples = Display(self, "Load Samples")
+        self.reaction = Display(self, "Reaction")
+        self.status = Status(self)
+        self.reactors = Reactors(self)
+        self.stop = QPushButton("Stop")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.graphitization, 1, 1)
+        self.container.addWidget(self.conditioning, 2, 0)
+        self.container.addWidget(self.load_samples, 2, 1)
+        self.container.addWidget(self.reaction, 2, 2)
+        self.container.addWidget(self.stop, 0, 1)
+        self.container.addWidget(self.status, 3, 1)
+        self.container.addWidget(self.reactors, 4, 1)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -157,76 +208,32 @@ class Control(QWidget):
         with open("procedures_config.json", "r") as f:
             self.config = json.load(f)
 
-        # Devices
         self.smc_device = smc.SmcDevNet()
         self.smc_device.start()
         self.keller_device = keller.Keller()
         self.tm_device = tm.TMHardware()
         self.peltier_device = peltier.Peltier()
 
-        # Schematic
         self.schematic = schematic.Schematic(self)
-
-        # Graph
         self.graph = History(self, self.schematic.reactors)
-        self.schematic.keller_worker.update.connect(self.graph.update)
-
-        # Table
         self.table = Table(self)
-
-        # Procedures 
+        self.panel = Panel(self)
         self.procedures = procedures.Procedures(self)
-    
-        # # Displays
-        # self.conditioning = Display(self, "Conditioning")
-        # self.load_samples = Display(self, "Load Samples")
-        # self.reaction = Display(self, "Reaction")
-        # self.separate = Display(self, "Separate")
-        # self.stages = {
-        #     "Conditioning": self.conditioning, 
-        #     "Load Samples": self.load_samples, 
-        #     "Reaction": self.reaction, 
-        #     "Separate": self.separate
-        # } # Could be prettier
 
-        # self.conditioning.button.clicked.connect(lambda: self.procedures.start([self.conditioning.name]))
-        # self.load_samples.button.clicked.connect(lambda: self.procedures.start([self.load_samples.name]))
-        # self.reaction.button.clicked.connect(lambda: self.procedures.start([self.reaction.name]))
+        self.schematic.keller_worker.update.connect(self.graph.update)
+        self.panel.conditioning.button.clicked.connect(lambda: self.procedures.start(["Conditioning"])) # move to function parameters?
+        self.panel.load_samples.button.clicked.connect(lambda: self.procedures.start(["Load Samples"]))
+        self.panel.reaction.button.clicked.connect(lambda: self.procedures.start(["Reaction"]))
+        self.panel.graphitization.button.clicked.connect(lambda: self.procedures.start(["Conditioning", "Load Samples", "Reaction"])) # make a wrapper
+        self.panel.stop.clicked.connect(self.stop)
+        self.panel.reactors.btn_open.clicked.connect(lambda: self.procedures.set_reactors(1))
+        self.panel.reactors.btn_close.clicked.connect(lambda: self.procedures.set_reactors(0))
 
-        # self.displays = QGridLayout()
-        # self.displays.addWidget(self.conditioning, 0, 0)
-        # self.displays.addWidget(self.load_samples, 0, 1)
-        # self.displays.addWidget(self.reaction, 0, 2)
-        # self.displays.addWidget(self.separate, 0, 3)
-
-        # # Buttons
-        # self.start_btn = Button(self, "Start")
-        # self.stop_btn = Button(self, "Stop")
-        # self.reset_btn = Button(self, "Reset")
-
-        # self.start_btn.button.clicked.connect(lambda: self.procedures.start([self.conditioning.name, self.load_samples.name, self.reaction.name]))
-        # self.stop_btn.button.clicked.connect(self.stop)
-        # self.reset_btn.button.clicked.connect(self.reset)
-
-        # self.buttons = QGridLayout()
-        # self.buttons.addWidget(self.start_btn, alignment=Qt.AlignmentFlag.AlignTop)
-        # self.buttons.addWidget(self.stop_btn, alignment=Qt.AlignmentFlag.AlignTop)
-        # self.buttons.addWidget(self.reset_btn, alignment=Qt.AlignmentFlag.AlignTop)
-
-        # # Overview
-        # self.overview = QWidget(self)
-        # self.overview.setFixedSize(1000, 600)
-        # self.container = QHBoxLayout(self.overview)
-        # self.container.setContentsMargins(20, 20, 20, 20)
-        # self.container.addLayout(self.buttons)
-        # self.container.addLayout(self.displays)
-
-        # Grid
-        self.grid = QGridLayout(self)
-        self.grid.addWidget(self.schematic, 0, 0)
-        self.grid.addWidget(self.graph, 0, 1)
-        self.grid.addWidget(self.table, 1, 1)
-        # self.grid.addWidget(self.overview, 1, 0, alignment=Qt.AlignmentFlag.AlignRight)
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.schematic, 0, 0)
+        self.container.addWidget(self.graph, 0, 1)
+        self.container.addWidget(self.panel, 1, 0)
+        self.container.addWidget(self.table, 1, 1)
 
     def prompt(self, message, event):
         reply = QMessageBox.warning(
@@ -258,8 +265,8 @@ class Control(QWidget):
             obj.set_text("")
 
     def set_running(self, stage: str, message: str):
-        if stage in self.stages.keys():
-            self.stages[stage].set_text(message)
+        self.panel.status.set_text(stage, message)
+        print(stage + ": " + message)
 
     def closeEvent(self, event):
         self.schematic.closeEvent(event)

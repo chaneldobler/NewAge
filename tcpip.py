@@ -1,49 +1,84 @@
 import socket
-import time
+from PySide6.QtCore import QMutex, QMutexLocker
 
 class TcpIp:
-    def __init__(self):
-        self.EA_IP = "10.236.4.193"
-        self.PORT = 1984
-        self.TIMEOUT = 6.0
+    def __init__(self, ip="10.236.4.193", port=1984, timeout=6.0):
+        self.ip = ip
+        self.port = port
+        self.timeout = timeout
+        self.mutex = QMutex()
+        self.socket = None
+
+    def _ensure_connected(self) -> bool:
+        if self.socket is not None:
+            return True
+    
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.settimeout(self.timeout)
+            self.socket.connect((self.ip, self.port))
+            return True
+        except Exception as e:
+            self.socket = None
+            return False
 
     def send_command(self, command: str) -> str:
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(self.TIMEOUT)
-                s.connect((self.EA_IP, self.PORT))
-                
-                formatted_cmd = (command.strip() + "\r\n").encode('utf-8')
-                s.sendall(formatted_cmd)
-                
-                data = s.recv(512)
-                if data:
-                    return data.decode('utf-8', errors='ignore').strip()
-                return ""
-
-        # TODO if reply is none 
+        locker = QMutexLocker(self.mutex)
         
+        if not self._ensure_connected():
+            return ""
+
+        try:
+            formatted_cmd = (command.strip() + "\r\n").encode('utf-8')
+            self.socket.sendall(formatted_cmd)
+
+            data = self.socket.recv(2048)
+            if data:
+                return data.decode('utf-8', errors='ignore').strip()
+            
+            self._close_socket()
+            return ""
+
         except socket.timeout:
-            print(f"Timeout sending command: '{command}'")
+            self._close_socket()
             return ""
         except Exception as e:
-            print(f"Communication Error: {e}")
+            self._close_socket()
             return ""
 
-    def get_index(self) -> int:
+    def _close_socket(self):
+        if self.socket:
+            try:
+                self.socket.close()
+            except Exception:
+                pass
+            self.socket = None
+
+    def get_status(self) -> str:
+        return self.send_command("?STS")
+
+    def get_index(self) -> str:
         return self.send_command("?SINX")
 
-    def get_name(self, index: int = 1) -> str:
+    def get_name(self, index: int) -> str:
         return self.send_command(f"?NAM {index}")
 
-    def get_weight(self, index: int = 1) -> float:
+    def get_weight(self, index: int) -> str:
         return self.send_command(f"?WGH {index}")
 
-    def get_c(self, index: int = 1) -> float:
-        return self.send_command(f"?PCT {index} C")
+    def get_c(self, index: int) -> float:
+        res = self.send_command(f"?PCT {index} C")
+        try:
+            return float(res)
+        except ValueError:
+            return 0.0
 
-    def get_n(self, index: int = 1) -> float:
-        return self.send_command(f"?PCT {index} N")
+    def get_n(self, index: int) -> float:
+        res = self.send_command(f"?PCT {index} N")
+        try:
+            return float(res)
+        except ValueError:
+            return 0.0
 
     def get_process_status(self) -> str:
         return self.send_command("SEQ")
@@ -54,9 +89,6 @@ class TcpIp:
     def stop_processing(self) -> str:
         return self.send_command("SEQOFF")
 
-    def get_status(self) -> str:
-        return self.send_command("?STS")
-
     def start(self) -> str:
         return self.send_command("STRT")
 
@@ -65,7 +97,4 @@ class TcpIp:
 
 if __name__ == "__main__":
     tcpip = TcpIp()
-    # tcpip.start_processing()
-    # print(tcpip.get_status())
-    # print(tcpip.get_process_status())
-    tcpip.sleep()
+    print(tcpip.sleep())

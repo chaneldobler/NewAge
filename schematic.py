@@ -72,7 +72,7 @@ class Oven(QFrame):
         self.value = 0
         self.running = False
 
-        self.color = QColor.fromHslF(0, 0.5, 0.45)
+        self.color = QColor.fromHslF(0, 0.95, 0.45)
         self.title = c.Title(f"Oven {self.id}")
         self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
 
@@ -121,7 +121,7 @@ class Trap(QFrame):
         self.value = 0
         self.running = False
 
-        self.color = QColor.fromHslF(0, 0.5, 0.45)
+        self.color = QColor.fromHslF(0, 0.95, 0.45)
         self.title = c.Title(f"Trap")
         self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
 
@@ -161,7 +161,7 @@ class Peltier(QWidget):
         self.active = True 
         self.running = False
 
-        self.color = QColor.fromHslF(0.5, 0.5, 0.45)
+        self.color = QColor.fromHslF(0.5, 0.95, 0.45)
         self.title = c.Title(f"Peltier {nr}")
 
         self.container = QVBoxLayout(self)
@@ -360,7 +360,7 @@ class Schematic(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        pen = QPen(QColor("black"), 2)
+        pen = QPen(QColor("grey"), 1)
         painter.setPen(pen)
 
         # ----- Connecting Lines -----

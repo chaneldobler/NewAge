@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 
 styleSheet = f"""
     QPushButton {{
-        border: 1px solid black;
+        border: 1px solid grey;
     }}
     QPushButton:hover {{
         color: white;
@@ -26,6 +26,7 @@ styleSheet = f"""
     }}
     Title {{
         color: white;
+        background-color: grey;
         padding: 12px;
         font-size: 22px;
         font-weight: bold;
