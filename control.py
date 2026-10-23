@@ -20,7 +20,7 @@ class History(QWidget):
     def __init__(self, parent, pressures):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1700, 1300) # sizing?
+        self.setFixedSize(2000, 1300)
         self.pressures = pressures
         self.history = [[] for _ in self.pressures]
         self.dt = 0.1
@@ -66,7 +66,7 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1700, 600)
+        self.setFixedSize(2000, 600)
         self.headers = ["Sample Name", "Weight [mg]", "CO2", "CO2 fin", "CO2 + H2", "p end"]
         self.reactors = [f"Reactor {i+1}" for i in range(10)]
 
@@ -86,7 +86,7 @@ class Table(QWidget):
             QTableView, QHeaderView, QHeaderView::section, QTableCornerButton::section {
                 background-color: white;
                 color: black;
-                font-size: 24px;
+                font-size: 20px;
                 border: none;
             }
             QTableView {
@@ -101,8 +101,8 @@ class Table(QWidget):
             QHeaderView::section, QTableCornerButton::section {
                 padding-top: 8px;
                 padding-bottom: 8px;
-                padding-left: 12px;
-                padding-right: 12px;
+                padding-left: 64px;
+                padding-right: 64px;
                 border-right: 1px solid grey;
                 border-bottom: 1px solid grey;
             }
@@ -155,14 +155,19 @@ class Status(QFrame):
         self.parent = parent
 
         self.title = components.Title("Status", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.display = QLabel("--", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.main = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.side = QLabel("", alignment=Qt.AlignmentFlag.AlignCenter)
 
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.title)
-        self.container.addWidget(self.display)   
+        self.container.addWidget(self.main)
+        self.container.addWidget(self.side)      
 
-    def set_text(self, stage: str, message: str):
-        self.display.setText(stage + ": " + message)
+    def set_main(self, message: str):
+        self.main.setText(message)
+
+    def set_side(self, message: str):
+        self.side.setText(message)
 
 class Reactors(QFrame):
     def __init__(self, parent):
@@ -182,6 +187,7 @@ class Panel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
+        self.setFixedSize(1300, 600)
         self.setStyleSheet(components.styleSheet)
 
         self.graphitization = Display(self, "Graphitization")
@@ -190,16 +196,16 @@ class Panel(QWidget):
         self.reaction = Display(self, "Reaction")
         self.status = Status(self)
         self.reactors = Reactors(self)
-        self.stop = QPushButton("Stop")
+        self.stop = QPushButton("Abort")
 
         self.container = QGridLayout(self)
+        self.container.addWidget(self.stop, 0, 1)
         self.container.addWidget(self.graphitization, 1, 1)
+        self.container.addWidget(self.status, 0, 0, 2, 1)
         self.container.addWidget(self.conditioning, 2, 0)
         self.container.addWidget(self.load_samples, 2, 1)
         self.container.addWidget(self.reaction, 2, 2)
-        self.container.addWidget(self.stop, 0, 1)
-        self.container.addWidget(self.status, 3, 1)
-        self.container.addWidget(self.reactors, 4, 1)
+        self.container.addWidget(self.reactors, 3, 1)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -240,9 +246,6 @@ class Control(QWidget):
             self,
             "User Action Required",
             message,
-            QMessageBox.StandardButton.Retry | 
-            QMessageBox.StandardButton.Ignore | 
-            QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Retry
         )
         self.procedures.prompt_reply = reply
@@ -264,9 +267,13 @@ class Control(QWidget):
         for obj in self.stages.values():
             obj.set_text("")
 
-    def set_running(self, stage: str, message: str):
-        self.panel.status.set_text(stage, message)
-        print(stage + ": " + message)
+    def set_main(self, message: str):
+        self.panel.status.set_main(message)
+        print(message)
+
+    def set_side(self, message: str):
+        self.panel.status.set_side(message)
+        print(message)
 
     def closeEvent(self, event):
         self.schematic.closeEvent(event)

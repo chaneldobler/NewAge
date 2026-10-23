@@ -5,7 +5,17 @@ from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt
 
 styleSheet = f"""
+    QWidget {{
+        margin: 4px;
+        padding: 8px;
+        font-size: 20px
+    }}
+    QFrame {{
+        background-color: white;
+    }}
     QPushButton {{
+        color: black;
+        background-color: white;
         border: 1px solid grey;
     }}
     QPushButton:hover {{
@@ -16,18 +26,14 @@ styleSheet = f"""
         color: white;
         background-color: grey;
     }}
-    QFrame {{
+    QLabel {{
+        color: black;
         background-color: white;
-    }}
-    QWidget {{
-        margin: 6px;
-        padding: 6px;
-        font-size: 20px
+        border: 1px solid grey;
     }}
     Title {{
         color: white;
         background-color: grey;
-        padding: 12px;
         font-size: 22px;
         font-weight: bold;
     }}

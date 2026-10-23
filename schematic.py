@@ -73,7 +73,7 @@ class Oven(QFrame):
         self.running = False
 
         self.color = QColor.fromHslF(0, 0.95, 0.45)
-        self.title = c.Title(f"Oven {self.id}")
+        self.title = c.Title(f"Oven {self.id - 1}")
         self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
 
         self.container = QVBoxLayout(self)
@@ -153,7 +153,7 @@ class Trap(QFrame):
         else:
             self.display.setText(f"{val} °C")
 
-class Peltier(QWidget):
+class Peltier(QFrame):
     def __init__(self, parent, id, nr):
         super().__init__(parent)
         self.parent = parent
@@ -161,7 +161,7 @@ class Peltier(QWidget):
         self.active = True 
         self.running = False
 
-        self.color = QColor.fromHslF(0.5, 0.95, 0.45)
+        self.color = QColor.fromHslF(0.6, 0.95, 0.45)
         self.title = c.Title(f"Peltier {nr}")
 
         self.container = QVBoxLayout(self)
@@ -220,7 +220,7 @@ class Valve(QWidget):
         QPushButton {{
             color: {color};
             background-color: {bg_color};
-            border-radius: 24px;
+            border-radius: 26px;
             border: 1px solid black;
         }}
         QPushButton:hover {{
@@ -239,22 +239,11 @@ class Valve(QWidget):
         else:
             self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 1)
 
-class Symbol(QWidget):
-    def __init__(self, parent, name):
-        super().__init__(parent)
-        self.parent = parent
-        self.name = name
-
-        self.title = c.Title(name)
-        self.title.setStyleSheet(f"background-color: grey;")
-
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.title)
-
 class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
+        self.setFixedSize(1300, 1300)
         self.setStyleSheet(c.styleSheet)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)
@@ -284,9 +273,9 @@ class Schematic(QWidget):
 
         self.peltiers = [Peltier(self, id, nr+1) for nr, (_, id) in enumerate(self.config["Coolers"].items())]
 
-        self.h2 = Symbol(self, "H2")
-        self.vacuum = Symbol(self, "Vac")
-        self.ea = Symbol(self, "EA")
+        self.h2 = c.Title("H2")
+        self.vacuum = c.Title("Vac")
+        self.ea = c.Title("EA")
 
         # ----- Layout ------
         self.grid = QGridLayout(self)
