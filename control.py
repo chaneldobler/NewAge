@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QPolygonF, QBrus
 import pyqtgraph as pg
 
 # Hardware & Worker Imports
-import keller, smc, tm, peltier
+import keller, smc, tm, peltier, tcpip
 import worker
 import procedures
 import schematic
@@ -132,11 +132,9 @@ class Display(QFrame):
 
         self.color = QColor.fromHslF(0.75, 0.5, 0.45)
         self.title = components.Title(label, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.button = QPushButton("Start")
 
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.title)
-        self.container.addWidget(self.button)
 
         self.update()
 
@@ -191,16 +189,20 @@ class Panel(QWidget):
         self.setStyleSheet(components.styleSheet)
 
         self.graphitization = Display(self, "Graphitization")
-        self.conditioning = Display(self, "Conditioning")
-        self.load_samples = Display(self, "Load Samples")
-        self.reaction = Display(self, "Reaction")
+        self.conditioning = QPushButton("Conditioning")
+        self.load_samples = QPushButton("Load Samples")
+        self.reaction = QPushButton("Reaction")
         self.status = Status(self)
         self.reactors = Reactors(self)
-        self.stop = QPushButton("Abort")
+        self.start =  QPushButton("Start")
+        self.stop = QPushButton("Stop")
+        self.reset = QPushButton("Reset")
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.stop, 0, 1)
-        self.container.addWidget(self.graphitization, 1, 1)
+        self.container.addWidget(self.start, 3, 2)
+        self.container.addWidget(self.stop, 1, 2)
+        self.container.addWidget(self.reset, 0, 2)
+        self.container.addWidget(self.graphitization, 0, 1)
         self.container.addWidget(self.status, 0, 0, 2, 1)
         self.container.addWidget(self.conditioning, 2, 0)
         self.container.addWidget(self.load_samples, 2, 1)
@@ -214,11 +216,12 @@ class Control(QWidget):
         with open("procedures_config.json", "r") as f:
             self.config = json.load(f)
 
-        self.smc_device = smc.SmcDevNet()
+        self.smc_device = smc.SmcDevNet() # change names
         self.smc_device.start()
         self.keller_device = keller.Keller()
         self.tm_device = tm.TMHardware()
         self.peltier_device = peltier.Peltier()
+        self.tcpip = tcpip.TcpIp()
 
         self.schematic = schematic.Schematic(self)
         self.graph = History(self, self.schematic.reactors)
@@ -227,13 +230,14 @@ class Control(QWidget):
         self.procedures = procedures.Procedures(self)
 
         self.schematic.keller_worker.update.connect(self.graph.update)
-        self.panel.conditioning.button.clicked.connect(lambda: self.procedures.start(["Conditioning"])) # move to function parameters?
-        self.panel.load_samples.button.clicked.connect(lambda: self.procedures.start(["Load Samples"]))
-        self.panel.reaction.button.clicked.connect(lambda: self.procedures.start(["Reaction"]))
-        self.panel.graphitization.button.clicked.connect(lambda: self.procedures.start(["Conditioning", "Load Samples", "Reaction"])) # make a wrapper
+        self.panel.conditioning.clicked.connect(lambda: self.procedures.start(["Conditioning"])) # move to function parameters?
+        self.panel.load_samples.clicked.connect(lambda: self.procedures.start(["Load Samples"]))
+        self.panel.reaction.clicked.connect(lambda: self.procedures.start(["Reaction"]))
+        self.panel.start.clicked.connect(lambda: self.procedures.start(["Conditioning", "Load Samples", "Reaction"])) # make a wrapper
         self.panel.stop.clicked.connect(self.stop)
-        self.panel.reactors.btn_open.clicked.connect(lambda: self.procedures.set_reactors(1))
-        self.panel.reactors.btn_close.clicked.connect(lambda: self.procedures.set_reactors(0))
+        self.panel.reactors.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
+        self.panel.reactors.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
+        self.panel.reset.clicked.connect(self.reset)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.schematic, 0, 0)
@@ -241,15 +245,22 @@ class Control(QWidget):
         self.container.addWidget(self.panel, 1, 0)
         self.container.addWidget(self.table, 1, 1)
 
-    def prompt(self, message, event):
-        reply = QMessageBox.warning(
-            self,
-            "User Action Required",
-            message,
-            QMessageBox.StandardButton.Retry
-        )
-        self.procedures.prompt_reply = reply
-        event.set()
+    def prompt(self, message, event=None):
+        if event is not None:
+            reply = QMessageBox.warning(
+                self,
+                "User Action Required",
+                message,
+                QMessageBox.StandardButton.Retry
+            )
+            self.procedures.prompt_reply = reply
+            event.set()
+        else:
+            QMessageBox.warning(
+                self,
+                "Configuration Error",
+                message,
+            )
 
     def stop(self):
         self.schematic.stop()
@@ -264,8 +275,7 @@ class Control(QWidget):
         self.graph.reset()
         for r in self.schematic.reactors:
             r.reset()
-        for obj in self.stages.values():
-            obj.set_text("")
+        self.procedures.set_reactor_valves(0)
 
     def set_main(self, message: str):
         self.panel.status.set_main(message)

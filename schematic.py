@@ -23,15 +23,18 @@ class Reactor(QFrame):
         self.slope = 1
 
         self.color = QColor.fromHslF(((self.id + 4)/12) % 1, 0.95, 0.45)
-        self.title = c.Title(f"Reactor {self.id}")
-        self.display = QLabel("-- mbar", alignment=Qt.AlignmentFlag.AlignRight)
+        self.title = c.Title(f"Reactor {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display = c.Body("--", alignment=Qt.AlignmentFlag.AlignRight)
+        self.display.setFixedWidth(100)
+        self.unit = QLabel("mbar", alignment=Qt.AlignmentFlag.AlignLeft)
         self.button = QPushButton("Deactivate")
         self.button.clicked.connect(self.toggle)
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0)
-        self.container.addWidget(self.display, 1, 0)
-        self.container.addWidget(self.button, 2, 0)
+        self.container.addWidget(self.title, 0, 0, 1, 2)
+        self.container.addWidget(self.display, 1, 0, 1, 1)
+        self.container.addWidget(self.unit, 1, 1, 1, 1)
+        self.container.addWidget(self.button, 2, 0, 1, 2)
 
         self.update()
 
@@ -59,9 +62,9 @@ class Reactor(QFrame):
         if not self.active:
             self.display.setText("")
         elif val is None:
-            self.display.setText("-- mbar")
+            self.display.setText("--")
         else:
-            self.display.setText(f"{int(self.get_value() * 1000)} mbar")
+            self.display.setText(f"{int(self.get_value() * 1000)}")
 
 class Oven(QFrame):
     def __init__(self, parent, id):
@@ -73,12 +76,15 @@ class Oven(QFrame):
         self.running = False
 
         self.color = QColor.fromHslF(0, 0.95, 0.45)
-        self.title = c.Title(f"Oven {self.id - 1}")
-        self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
+        self.title = c.Title(f"Oven {self.id - 1}", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display = c.Body("--", alignment=Qt.AlignmentFlag.AlignRight)
+        self.display.setFixedWidth(90)
+        self.unit = QLabel("\u00b0C", alignment=Qt.AlignmentFlag.AlignLeft)
 
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.title)
-        self.container.addWidget(self.display)
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0, 1, 2)
+        self.container.addWidget(self.display, 1, 0, 1, 1)
+        self.container.addWidget(self.unit, 1, 1, 1, 1)
 
         self.update()
 
@@ -109,9 +115,9 @@ class Oven(QFrame):
         if not self.active:
             self.display.setText("")
         elif val is None:
-            self.display.setText("-- °C")
+            self.display.setText("--")
         else:
-            self.display.setText(f"{val} °C")
+            self.display.setText(f"{val}")
 
 class Trap(QFrame):
     def __init__(self, parent, id):
@@ -122,12 +128,15 @@ class Trap(QFrame):
         self.running = False
 
         self.color = QColor.fromHslF(0, 0.95, 0.45)
-        self.title = c.Title(f"Trap")
-        self.display = QLabel("-- °C", alignment=Qt.AlignmentFlag.AlignRight)
+        self.title = c.Title(f"Trap", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.display = c.Body("--", alignment=Qt.AlignmentFlag.AlignRight)
+        self.display.setFixedWidth(90)
+        self.unit = QLabel("\u00b0C", alignment=Qt.AlignmentFlag.AlignLeft)
 
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.title)
-        self.container.addWidget(self.display)
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0, 1, 2)
+        self.container.addWidget(self.display, 1, 0, 1, 1)
+        self.container.addWidget(self.unit, 1, 1, 1, 1)
 
         self.update()
 
@@ -149,9 +158,9 @@ class Trap(QFrame):
     def set_value(self, val: float):
         self.value = val
         if val is None:
-            self.display.setText("-- °C")
+            self.display.setText("--")
         else:
-            self.display.setText(f"{val} °C")
+            self.display.setText(f"{val}")
 
 class Peltier(QFrame):
     def __init__(self, parent, id, nr):
@@ -197,7 +206,7 @@ class Valve(QWidget):
 
         self.button = QPushButton(f"{self.id}")
         self.button.clicked.connect(self.request) # move to parent
-        self.button.setFixedSize(60, 60)
+        self.button.setFixedSize(56, 56)
 
         self.container = QVBoxLayout(self)
         self.container.addWidget(self.button)
@@ -220,8 +229,8 @@ class Valve(QWidget):
         QPushButton {{
             color: {color};
             background-color: {bg_color};
-            border-radius: 26px;
-            border: 1px solid black;
+            border-radius: 24px;
+            border: 1px solid grey;
         }}
         QPushButton:hover {{
             color: white;
@@ -234,16 +243,17 @@ class Valve(QWidget):
         """)
 
     def request(self):
-        if self.active:
-            self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 0)
-        else:
-            self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 1)
+        if self.parent is not None:
+            if self.active:
+                self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 0)
+            else:
+                self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 1)
 
 class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1300, 1300)
+        self.setFixedSize(1400, 1300)
         self.setStyleSheet(c.styleSheet)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)
@@ -314,7 +324,7 @@ class Schematic(QWidget):
             self.tm_device = self.parent.tm_device
             self.peltier_device = self.parent.peltier_device
 
-            self.smc_worker = worker.Worker(0.5, self.smc_device.get)
+            self.smc_worker = worker.Worker(0.1, self.smc_device.get)
             self.keller_worker = worker.Worker(0.1, self.keller_device.get, [r.id for r in self.reactors])
             self.tm_worker = worker.Worker(1.0, self.tm_device.get, [h.id for h in self.heaters])
             self.peltier_worker = worker.Worker(1.0)

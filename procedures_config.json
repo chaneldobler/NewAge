@@ -1,22 +1,22 @@
 {
   "Conditioning": {
     "Conditioning Oven Temperature": {
-      "Value": 50,
+      "Value": 500,
       "Default": 500,
       "Unit": "\u00b0C"
     },
     "Preheating Iron Duration": {
-      "Value": 10,
+      "Value": 300,
       "Default": 300,
       "Unit": "s"
     },
     "Reactors Evacuation Duration": {
-      "Value": 10,
+      "Value": 180,
       "Default": 180,
       "Unit": "s"
     },
     "Leak Test Duration": {
-      "Value": 10,
+      "Value": 300,
       "Default": 300,
       "Unit": "s"
     },
@@ -26,12 +26,12 @@
       "Unit": "bar"
     },
     "H2 Cycle Repetitions": {
-      "Value": 1,
+      "Value": 3,
       "Default": 3,
       "Unit": ""
     },
     "H2 Cycle Duration": {
-      "Value": 10,
+      "Value": 300,
       "Default": 300,
       "Unit": "s"
     }
@@ -48,51 +48,51 @@
       "Unit": "s"
     },
     "Trap Heating Temperature": {
-      "Value": 50,
+      "Value": 420,
       "Default": 420,
       "Unit": "\u00b0C"
     },
     "CO2 Pressure Scaling": {
-      "Value": 1,
+      "Value": 2.3,
       "Default": 2.3,
       "Unit": ""
     }
   },
   "Reaction": {
     "Reaction Temperature": {
-      "Value": 50,
+      "Value": 580,
       "Default": 580,
       "Unit": "\u00b0C"
     },
     "Reaction Duration": {
-      "Value": 10,
+      "Value": 7200,
       "Default": 7200,
       "Unit": "s"
     },
     "End Pressure Limit": {
-      "Value": 1.2,
+      "Value": 0.18,
       "Default": 0.18,
       "Unit": "bar"
     },
     "Water Removal Duration": {
-      "Value": 10,
+      "Value": 420,
       "Default": 420,
       "Unit": "s"
     }
   },
   "Separate": {
     "Clean Trap Temperature": {
-      "Value": 50,
+      "Value": 450,
       "Default": 450,
       "Unit": "\u00b0C"
     },
     "Clean Trap Duration": {
-      "Value": 5,
+      "Value": 60,
       "Default": 60,
       "Unit": "s"
     },
     "Trap Cooling Temperature": {
-      "Value": 30,
+      "Value": 10,
       "Default": 10,
       "Unit": "\u00b0C"
     }
