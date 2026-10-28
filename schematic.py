@@ -245,9 +245,9 @@ class Valve(QWidget):
     def request(self):
         if self.parent is not None:
             if self.active:
-                self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 0)
+                self.parent.parent.smc_worker.request(self.parent.parent.smc.set, [self.id], 0)
             else:
-                self.parent.smc_worker.request(self.parent.smc_device.set, [self.id], 1)
+                self.parent.parent.smc_worker.request(self.parent.parent.smc.set, [self.id], 1)
 
 class Schematic(QWidget):
     def __init__(self, parent):
@@ -317,38 +317,23 @@ class Schematic(QWidget):
         self.grid.addWidget(self.vacuum, 6, 5, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.ea, 7, 1, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # ----- Workers ------
-        if self.parent is not None:
-            self.smc_device = self.parent.smc_device 
-            self.keller_device = self.parent.keller_device
-            self.tm_device = self.parent.tm_device
-            self.peltier_device = self.parent.peltier_device
+    def get_reactor_idx(self):
+        return [r.id for r in self.reactors]
 
-            self.smc_worker = worker.Worker(0.1, self.smc_device.get)
-            self.keller_worker = worker.Worker(0.1, self.keller_device.get, [r.id for r in self.reactors])
-            self.tm_worker = worker.Worker(1.0, self.tm_device.get, [h.id for h in self.heaters])
-            self.peltier_worker = worker.Worker(1.0)
+    def get_heaters_idx(self):
+        return [h.id for h in self.heaters]
 
-            self.smc_worker.update.connect(self.update_valves)
-            self.keller_worker.update.connect(self.update_reactors)
-            self.tm_worker.update.connect(self.update_heaters) # move?
-
-            self.smc_worker.start()
-            self.keller_worker.start()
-            self.tm_worker.start()
-            self.peltier_worker.start()
-
-    def update_reactors(self, values):
+    def set_reactor_values(self, values):
         for r in self.reactors:
             if r.id <= len(values):
                 r.set_value(values[r.id - 1])
 
-    def update_heaters(self, values):
+    def set_heater_values(self, values):
         for h in self.heaters:
             if h.id <= len(values):
                 h.set_value(values[h.id - 1])
 
-    def update_valves(self, values):
+    def set_valves_active(self, values):
         for v in self.valves:
             if v.id <= len(values):
                 v.set_active(values[v.id - 1])
@@ -362,7 +347,6 @@ class Schematic(QWidget):
         pen = QPen(QColor("grey"), 1)
         painter.setPen(pen)
 
-        # ----- Connecting Lines -----
         # Top and Bottom Lines
         painter.drawLine(self.grid.cellRect(2, 4).center(), self.grid.cellRect(2, 8).center())
         painter.drawLine(self.grid.cellRect(8, 4).center(), self.grid.cellRect(8, 8).center())
@@ -393,15 +377,6 @@ class Schematic(QWidget):
         for p in self.peltiers:
             p.set_running(False)
             p.set_active(True)
-
-    def closeEvent(self, event):
-        if self.parent is not None:
-            self.keller_worker.stop()
-            self.tm_worker.stop()
-            self.smc_worker.stop()
-            self.peltier_worker.stop()
-
-        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -67,18 +67,10 @@ class TcpIp:
         return self.send_command(f"?WGH {index}")
 
     def get_c(self, index: int) -> float:
-        res = self.send_command(f"?PCT {index} C")
-        try:
-            return float(res)
-        except ValueError:
-            return 0.0
+        return self.send_command(f"?PCT {index} C")
 
     def get_n(self, index: int) -> float:
-        res = self.send_command(f"?PCT {index} N")
-        try:
-            return float(res)
-        except ValueError:
-            return 0.0
+        return self.send_command(f"?PCT {index} N")
 
     def get_process_status(self) -> str:
         return self.send_command("SEQ")
