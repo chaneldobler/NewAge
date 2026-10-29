@@ -1,235 +1,39 @@
 
 import sys
-import numpy
-import time
 import json
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout
-from PySide6.QtGui import QColor, QPainter, QPen, QFont
-from PySide6.QtCore import Qt, QMutex, QMutexLocker
-
-import keller, smc, tm, peltier
-import worker
-import procedures
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QLabel, QGridLayout
+from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtCore import Qt
 import components as c
 
-class Reactor(QFrame):
-    def __init__(self, parent, id):
-        super().__init__(parent)
-        self.parent = parent
-        self.id = id
-        self.active = True 
-        self.value = 0
-        self.offset = 0
-        self.slope = 1
-
-        self.color = QColor.fromHslF(((self.id + 4)/12) % 1, 0.95, 0.45)
-        self.title = c.Title(f"Reactor {self.id}", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.display = c.Body("--", alignment=Qt.AlignmentFlag.AlignRight)
-        self.display.setFixedWidth(100)
-        self.unit = QLabel("mbar", alignment=Qt.AlignmentFlag.AlignLeft)
-        self.button = QPushButton("Deactivate")
-        self.button.clicked.connect(self.toggle)
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0, 1, 2)
-        self.container.addWidget(self.display, 1, 0, 1, 1)
-        self.container.addWidget(self.unit, 1, 1, 1, 1)
-        self.container.addWidget(self.button, 2, 0, 1, 2)
-
-        self.update()
-
-    def toggle(self):
-        self.active = not self.active
-        if self.active:
-            self.button.setText("Deactivate")
-        else: 
-            self.button.setText("Activate")
-        self.update()
-
-    def update(self):
-        color = self.color.name() if self.active else "black"
-        self.title.setStyleSheet(f"background-color: {color};")
-
-    def reset(self):
-        self.offset = 0
-        self.slope = 1
-
-    def get_value(self):
-        return self.slope*(self.value - self.offset)
-
-    def set_value(self, val: float):
-        self.value = val
-        if not self.active:
-            self.display.setText("")
-        elif val is None:
-            self.display.setText("--")
-        else:
-            self.display.setText(f"{int(self.get_value() * 1000)}")
-
-class Oven(QFrame):
-    def __init__(self, parent, id):
-        super().__init__(parent)
-        self.parent = parent
-        self.id = id
-        self.active = True 
-        self.value = 0
-        self.running = False
-
-        self.color = QColor.fromHslF(0, 0.95, 0.45)
-        self.title = c.Title(f"Oven {self.id - 1}", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.display = c.Body("--", alignment=Qt.AlignmentFlag.AlignRight)
-        self.display.setFixedWidth(90)
-        self.unit = QLabel("\u00b0C", alignment=Qt.AlignmentFlag.AlignLeft)
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0, 1, 2)
-        self.container.addWidget(self.display, 1, 0, 1, 1)
-        self.container.addWidget(self.unit, 1, 1, 1, 1)
-
-        self.update()
-
-    def set_active(self, active: bool):
-        if self.active != active:
-            self.active = active
-            self.update()
-
-    def set_running(self, running: bool):
-        if self.running != running:
-            self.running = running
-            self.update()
-
-    def update(self):
-        if not self.active:
-            color = "black"
-        elif not self.running:
-            color = "grey"
-        else:
-            color = self.color.name()
-        self.title.setStyleSheet(f"background-color: {color};")
-
-    def get_value(self):
-        return self.value
-
-    def set_value(self, val: float):
-        self.value = val
-        if not self.active:
-            self.display.setText("")
-        elif val is None:
-            self.display.setText("--")
-        else:
-            self.display.setText(f"{val}")
-
-class Trap(QFrame):
-    def __init__(self, parent, id):
-        super().__init__(parent)
-        self.parent = parent
-        self.id = id
-        self.value = 0
-        self.running = False
-
-        self.color = QColor.fromHslF(0, 0.95, 0.45)
-        self.title = c.Title(f"Trap", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.display = c.Body("--", alignment=Qt.AlignmentFlag.AlignRight)
-        self.display.setFixedWidth(90)
-        self.unit = QLabel("\u00b0C", alignment=Qt.AlignmentFlag.AlignLeft)
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0, 1, 2)
-        self.container.addWidget(self.display, 1, 0, 1, 1)
-        self.container.addWidget(self.unit, 1, 1, 1, 1)
-
-        self.update()
-
-    def set_running(self, running: bool):
-        if self.running != running:
-            self.running = running
-            self.update()
-
-    def update(self):
-        if not self.running:
-            color = "grey"
-        else:
-            color = self.color.name()
-        self.title.setStyleSheet(f"background-color: {color};")
-
-    def get_value(self):
-        return self.value
-
-    def set_value(self, val: float):
-        self.value = val
-        if val is None:
-            self.display.setText("--")
-        else:
-            self.display.setText(f"{val}")
-
-class Peltier(QFrame):
-    def __init__(self, parent, id, nr):
-        super().__init__(parent)
-        self.parent = parent
-        self.id = id
-        self.active = True 
-        self.running = False
-
-        self.color = QColor.fromHslF(0.6, 0.95, 0.45)
-        self.title = c.Title(f"Peltier {nr}")
-
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.title)
-
-        self.update()
-
-    def set_active(self, active: bool):
-        if self.active != active:
-            self.active = active
-            self.update()
-
-    def set_running(self, running: bool):
-        if self.running != running:
-            self.running = running
-            self.update()
-
-    def update(self):
-        if not self.active:
-            color = "black"
-        elif not self.running:
-            color = "grey"
-        else:
-            color = self.color.name()
-        self.title.setStyleSheet(f"background-color: {color};")
-
 class Valve(QWidget):
-    def __init__(self, parent, id):
+    def __init__(self, parent=None, id: int = 0):
         super().__init__(parent)
         self.parent = parent
         self.id = id
         self.active = False
 
         self.button = QPushButton(f"{self.id}")
-        self.button.clicked.connect(self.request) # move to parent
-        self.button.setFixedSize(56, 56)
+        self.button.setFixedSize(50, 50)
 
-        self.container = QVBoxLayout(self)
-        self.container.addWidget(self.button)
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.button, 0, 0)
 
-        self.update()
+        self.set_color()
 
     def set_active(self, active: bool):
         if self.active != active:
             self.active = active
-            self.update()
+            self.set_color()
 
-    def update(self):
-        if self.active:
-            color = "black"
-            bg_color = "white"
-        else:
-            color = "white"
-            bg_color = "black"
+    def set_color(self):
+        color = "black" if self.active else "white"
+        bg_color = "white" if self.active else "black"
         self.button.setStyleSheet(f"""
         QPushButton {{
             color: {color};
             background-color: {bg_color};
-            border-radius: 24px;
+            border-radius: 22px;
             border: 1px solid grey;
         }}
         QPushButton:hover {{
@@ -242,12 +46,125 @@ class Valve(QWidget):
         }}
         """)
 
-    def request(self):
-        if self.parent is not None:
-            if self.active:
-                self.parent.parent.smc_worker.request(self.parent.parent.smc.set, [self.id], 0)
-            else:
-                self.parent.parent.smc_worker.request(self.parent.parent.smc.set, [self.id], 1)
+class Symbol(QFrame):
+    def __init__(self, parent = None, name: str = "", color: str = "grey", id: int = 0, nr: int = 1, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.title = c.Title(name, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.color = color
+        self.id = id
+        self.nr = nr
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0, 1, 2)
+
+        self.set_color()
+
+    def set_color(self):
+        self.title.setStyleSheet(f"background-color: {self.color};")
+
+class Running:
+    def __init__(self, **kwargs):
+        self.running = False
+        super().__init__(**kwargs)
+
+    def set_running(self, running: bool):
+        if self.running != running:
+            self.running = running
+            self.set_color()
+
+    def set_color(self):
+        color = self.color if self.running else "grey"
+        self.title.setStyleSheet(f"background-color: {color};")
+
+class Active:
+    def __init__(self, **kwargs):
+        self.active = True
+        super().__init__(**kwargs)
+
+    def set_active(self, active: bool):
+        if self.active != active:
+            self.active = active
+            self.set_color()
+
+    def set_color(self):
+        color = self.color if self.active else "black"
+        self.title.setStyleSheet(f"background-color: {color};")
+
+class ActiveRunning(Active, Running):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_color(self):
+        if not self.active:
+            color = "black"
+        elif not self.running:
+            color = "grey"
+        else:
+            color = self.color
+        self.title.setStyleSheet(f"background-color: {color};")
+
+class Value:
+    def __init__(self, unit: str = "", **kwargs):
+        self.value = 0
+        super().__init__(**kwargs)
+
+        self.display = c.Body("", alignment=Qt.AlignmentFlag.AlignRight)
+        self.display.setFixedWidth(100)
+        self.unit = QLabel(unit)
+
+        self.container.addWidget(self.display, 1, 0, 1, 1)
+        self.container.addWidget(self.unit, 1, 1, 1, 1)
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, val: float):
+        self.value = val
+        text = str(self.get_value())
+        self.display.setText(text)
+
+class Peltier(ActiveRunning, Symbol):
+    def __init__(self, name: str = "Peltier", color: str = QColor.fromHslF(0.6, 0.95, 0.45).name(), nr: int = 1, **kwargs):
+        super().__init__(name = f"{name} {nr}", color = color, nr = nr, **kwargs)
+
+class Trap(Running, Value, Symbol):
+    def __init__(self, name: str = "Trap", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), unit: str = "\u00b0C", **kwargs):
+        super().__init__(name = name, color = color, unit = unit, **kwargs)
+
+class Oven(ActiveRunning, Value, Symbol):
+    def __init__(self, name: str = "Oven", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), nr: int = 1, unit: str = "\u00b0C", **kwargs):
+        super().__init__(name = f"{name} {nr}", color = color, nr = nr, unit = unit, **kwargs)
+
+class Reactor(Active, Value, Symbol):
+    def __init__(self, name: str = "Reactor", color: str = "grey", id: int = 0, nr: int = 1, unit = "mbar", **kwargs):
+        super().__init__(name = f"{name} {nr}", color = QColor.fromHslF(((id + 4)/12) % 1, 0.95, 0.45).name(), id = id, nr = nr, unit = unit, **kwargs)
+        self.offset = 0
+        self.slope = 1
+
+        self.button = QPushButton("Deactivate")
+        self.button.clicked.connect(self.toggle)
+
+        self.container.addWidget(self.button, 2, 0, 1, 2)
+
+    def toggle(self):
+        self.active = not self.active
+        if self.active:
+            self.button.setText("Deactivate")
+        else: 
+            self.button.setText("Activate")
+        self.set_color()
+
+    def reset(self):
+        self.offset = 0
+        self.slope = 1
+
+    def get_value(self):
+        return self.slope*(self.value - self.offset)
+
+    def set_value(self, val: float):
+        self.value = val
+        text = f"{int(self.get_value() * 1000)}"
+        self.display.setText(text)
 
 class Schematic(QWidget):
     def __init__(self, parent):
@@ -260,32 +177,32 @@ class Schematic(QWidget):
 
         # ----- Widgets -----
         valves = self.config["Valves"]
-        self.valve_reactors = [Valve(self, id) for name, id in valves.items() if "Reactor" in name]
-        self.valve_lines = [Valve(self, id) for name, id in valves.items() if "Line" in name]
-        self.valve_vacuum = Valve(self, valves["Vacuum"])
-        self.valve_trap = Valve(self, valves["Trap"])
-        self.valve_h2 = Valve(self, valves["H2"])
-        self.valve_vortex = Valve(self, valves["Vortex"])
-        self.valve_sampling = Valve(self, valves["Sampling"])
-        self.valve_lift = Valve(self, valves["Lift"])
+        self.valve_reactors = [Valve(parent=self, id=id) for name, id in valves.items() if "Reactor" in name]
+        self.valve_lines = [Valve(parent=self, id=id) for name, id in valves.items() if "Line" in name]
+        self.valve_vacuum = Valve(parent=self, id=valves["Vacuum"])
+        self.valve_trap = Valve(parent=self, id=valves["Trap"])
+        self.valve_h2 = Valve(parent=self, id=valves["H2"])
+        self.valve_vortex = Valve(parent=self, id=valves["Vortex"])
+        self.valve_sampling = Valve(parent=self, id=valves["Sampling"])
+        self.valve_lift = Valve(parent=self, id=valves["Lift"])
         self.valves = self.valve_reactors + self.valve_lines \
             + [self.valve_vacuum, self.valve_trap, self.valve_h2, self.valve_vortex, self.valve_sampling, self.valve_lift]
 
         self.valve_vortex.hide()
         self.valve_lift.hide()
 
-        self.reactors = [Reactor(self, id) for _, id in self.config["Reactors"].items()]
+        self.reactors = [Reactor(parent=self, id=id, nr=id) for _, id in self.config["Reactors"].items()]
 
         heaters = self.config["Heaters"]
-        self.trap = Trap(self, heaters["Trap"])
-        self.ovens = [Oven(self, id) for name, id in heaters.items() if "Oven" in name]
+        self.trap = Trap(parent=self, id=heaters["Trap"])
+        self.ovens = [Oven(parent=self, id=id, nr=id-1) for name, id in heaters.items() if "Oven" in name]
         self.heaters = [self.trap] + self.ovens
 
-        self.peltiers = [Peltier(self, id, nr+1) for nr, (_, id) in enumerate(self.config["Coolers"].items())]
+        self.peltiers = [Peltier(parent=self, id=id, nr=nr+1) for nr, (_, id) in enumerate(self.config["Coolers"].items())]
 
-        self.h2 = c.Title("H2")
-        self.vacuum = c.Title("Vac")
-        self.ea = c.Title("EA")
+        self.h2 = Symbol(parent=self, name="H2")
+        self.vacuum = Symbol(parent=self, name="Vac")
+        self.ea = Symbol(parent=self, name="EA")
 
         # ----- Layout ------
         self.grid = QGridLayout(self)
@@ -320,7 +237,7 @@ class Schematic(QWidget):
     def get_reactor_idx(self):
         return [r.id for r in self.reactors]
 
-    def get_heaters_idx(self):
+    def get_heater_idx(self):
         return [h.id for h in self.heaters]
 
     def set_reactor_values(self, values):
@@ -337,6 +254,17 @@ class Schematic(QWidget):
         for v in self.valves:
             if v.id <= len(values):
                 v.set_active(values[v.id - 1])
+
+    def stop(self):
+        for h in self.heaters:
+            h.set_running(False)
+
+        for o in self.ovens:
+            o.set_active(True)
+
+        for p in self.peltiers:
+            p.set_running(False)
+            p.set_active(True)
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -367,21 +295,8 @@ class Schematic(QWidget):
         painter.drawLine(self.grid.cellRect(6, 0).center(), self.grid.cellRect(6, 2).center())
         painter.drawLine(self.grid.cellRect(6, 1).center(), self.grid.cellRect(7, 1).center())
 
-    def stop(self):
-        for h in self.heaters:
-            h.set_running(False)
-
-        for o in self.ovens:
-            o.set_active(True)
-
-        for p in self.peltiers:
-            p.set_running(False)
-            p.set_active(True)
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-
     window = Schematic(parent=None)
-
     window.show()
     sys.exit(app.exec())

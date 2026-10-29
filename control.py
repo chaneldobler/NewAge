@@ -1,21 +1,14 @@
 import sys
-import os
-import json
 import time
-from PySide6 import QtWidgets,QtCore
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QVBoxLayout, QLabel, QSizePolicy, QGridLayout, QHBoxLayout, QLineEdit, QTableWidget, QTableWidgetItem, QTableView, QHeaderView, QMessageBox
-from PySide6.QtCore import QSize, QPoint, QPointF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QPolygonF, QBrush, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QAbstractItemView, QLabel, QGridLayout, QTableView, QHeaderView, QMessageBox
+from PySide6.QtGui import QStandardItem, QStandardItemModel, QFont
+from PySide6.QtCore import Qt
 import pyqtgraph as pg
-
-# Hardware & Worker Imports
 import keller, smc, tm, peltier, tcpip
 import worker
 import procedures
 import schematic
-import components
-
-# adapt to offset yes or no?
+import components as c
 
 class History(QWidget):
     def __init__(self, parent, pressures):
@@ -38,14 +31,14 @@ class History(QWidget):
 
         self.curves = []
         for p in self.pressures:
-            pen = pg.mkPen(color=p.color, width=2)
+            pen = pg.mkPen(color=p.color, width=1)
             curve = self.graph.plot(pen=pen, name=f"R{p.id}")
             self.curves.append(curve)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.graph, 0, 0)
 
-    def update(self, _):
+    def set_stamp(self, _):
         for p in self.pressures:
             if not p.active or p.value is None:
                 val = float('nan')
@@ -70,8 +63,8 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(2000, 700) # make adaptive in height
-        self.headers = ["Sample Name", "Weight [mg]", "CO2 [mbar]", "CO2 fin [mbar]", "CO2 + H2 [mbar]", "p end [mbar]"]
+        self.setFixedSize(2000, 700)
+        self.headers = ["Sample Name", "Weight [mg]", "CO2 [mbar]", "CO2 fin [mbar]", "CO2 + H2 [mbar]", "p end [mbar]", "N [%]", "C [%]"]
         self.reactors = [f"Reactor {i+1}" for i in range(10)]
 
         self.model = QStandardItemModel(len(self.reactors), len(self.headers))
@@ -85,7 +78,8 @@ class Table(QWidget):
         self.view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.view.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.view.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
-
+        self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.view.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.view.setStyleSheet("""
             QTableView, QHeaderView, QHeaderView::section, QTableCornerButton::section {
                 background-color: white;
@@ -97,10 +91,10 @@ class Table(QWidget):
                 gridline-color: grey;
             }
             QTableView::item {
-                padding-top: 8px;
-                padding-bottom: 8px;
-                padding-left: 12px;
-                padding-right: 12px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                padding-left: 16px;
+                padding-right: 16px;
             }
             QHeaderView::section, QTableCornerButton::section {
                 padding-top: 16px;
@@ -116,13 +110,14 @@ class Table(QWidget):
         """)
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.view)
+        self.container.addWidget(self.view, 0, 0)
 
     def set_entry(self, text, row, col):
         item = QStandardItem(str(text))
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.model.setItem(row, col, item)
 
-    def clear(self):
+    def reset(self):
         for row in range(self.model.rowCount()):
             for col in range(self.model.columnCount()):
                 self.model.setItem(row, col, None)
@@ -131,19 +126,14 @@ class Display(QFrame):
     def __init__(self, parent, label):
         super().__init__(parent)
         self.parent = parent
-        self.active = True
-        self.running = False
 
-        self.color = QColor.fromHslF(0.75, 0.5, 0.45)
-        self.title = components.Title(label, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        self.conditioning = QPushButton("Conditioning")
-        self.load_samples = QPushButton("Load Samples")
-        self.reaction = QPushButton("Reaction")
-
+        self.title = c.Title(label, alignment=Qt.AlignmentFlag.AlignCenter)
         self.start =  QPushButton("Start")
         self.stop = QPushButton("Stop")
         self.reset = QPushButton("Reset")
+        self.conditioning = QPushButton("Conditioning")
+        self.load_samples = QPushButton("Load Samples")
+        self.reaction = QPushButton("Reaction")
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.title, 0, 0, 1, 2)
@@ -154,27 +144,18 @@ class Display(QFrame):
         self.container.addWidget(self.load_samples, 2, 1)
         self.container.addWidget(self.reaction, 3, 1)
 
-        self.update()
-
-    def update(self):
-        if not self.active:
-            color = "black"
-        elif not self.running:
-            color = "grey"
-        else:
-            color = self.color.name()
-        self.title.setStyleSheet(f"background-color: {color};")
-
-class Status(QFrame):
+class Activity(QFrame):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
 
-        self.title = components.Title("Activity", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.worker_label = QLabel("Worker", alignment=Qt.AlignmentFlag.AlignRight)
-        self.helper_label = QLabel("Helper", alignment=Qt.AlignmentFlag.AlignRight)
-        self.worker_display = components.Body("", alignment=Qt.AlignmentFlag.AlignLeft)
-        self.helper_display = components.Body("", alignment=Qt.AlignmentFlag.AlignLeft)
+        self.title = c.Title("Activity", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.worker_label = QLabel("Worker")
+        self.helper_label = QLabel("Helper")
+        self.worker_display = c.Body("", alignment=Qt.AlignmentFlag.AlignLeft)
+        self.helper_display = c.Body("", alignment=Qt.AlignmentFlag.AlignLeft)
+        self.worker_display.setFixedWidth(500)
+        self.helper_display.setFixedWidth(500)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.title, 0, 0, 1, 2)
@@ -194,7 +175,7 @@ class Reactors(QFrame):
         super().__init__(parent)
         self.parent = parent
 
-        self.title = components.Title("Reactor Valves", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.title = c.Title("Reactor Valves", alignment=Qt.AlignmentFlag.AlignCenter)
         self.btn_open = QPushButton("Open")
         self.btn_close = QPushButton("Close")
 
@@ -208,15 +189,15 @@ class Panel(QWidget):
         super().__init__(parent)
         self.parent = parent
         self.setFixedSize(1400, 700)
-        self.setStyleSheet(components.styleSheet)
+        self.setStyleSheet(c.styleSheet)
 
         self.graphitization = Display(self, "Graphitization")
-        self.status = Status(self)
+        self.activity = Activity(self)
         self.reactors = Reactors(self)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.graphitization, 0, 1, 2, 1)
-        self.container.addWidget(self.status, 2, 1)
+        self.container.addWidget(self.activity, 2, 1)
         self.container.addWidget(self.reactors, 3, 1)
         self.container.addWidget(QWidget(), 0, 0)
 
@@ -224,8 +205,6 @@ class Control(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        with open("procedures_config.json", "r") as f:
-            self.config = json.load(f)
 
         self.smc = smc.SmcDevNet()
         self.keller = keller.Keller()
@@ -244,7 +223,7 @@ class Control(QWidget):
         self.helper = worker.Worker()
         self.smc_worker = worker.Worker(0.1, self.smc.get)
         self.keller_worker = worker.Worker(0.1, self.keller.get, self.schematic.get_reactor_idx())
-        self.tm_worker = worker.Worker(1.0, self.tm.get, self.schematic.get_heaters_idx())
+        self.tm_worker = worker.Worker(1.0, self.tm.get, self.schematic.get_heater_idx())
         self.peltier_worker = worker.Worker(1.0)
 
         self.procedures = procedures.Procedures(
@@ -261,13 +240,16 @@ class Control(QWidget):
         self.panel.reactors.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
         self.panel.reactors.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
 
-        self.worker.message.connect(self.panel.status.set_worker)
-        self.helper.message.connect(self.panel.status.set_helper)
+        for v in self.schematic.valves:
+            v.button.clicked.connect(self.request_wrapper(v))
+
+        self.worker.message.connect(self.panel.activity.set_worker)
+        self.helper.message.connect(self.panel.activity.set_helper)
         self.worker.prompt.connect(self.prompt)
         self.smc_worker.update.connect(self.schematic.set_valves_active)
         self.keller_worker.update.connect(self.schematic.set_reactor_values)
         self.tm_worker.update.connect(self.schematic.set_heater_values)
-        self.keller_worker.update.connect(self.graph.update)
+        self.keller_worker.update.connect(self.graph.set_stamp)
 
         self.worker.start()
         self.helper.start()
@@ -294,27 +276,39 @@ class Control(QWidget):
         self.peltier.stop()
 
     def reset(self):
-        self.table.clear()
+        self.table.reset()
         self.graph.reset()
         for r in self.schematic.reactors:
             r.reset()
+        # self.schematic.stop()
 
     def prompt(self, message, event=None):
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+
+        font = QFont()
+        font.setPointSize(18)
+        msg_box.setFont(font)
+
         if event is not None:
-            reply = QMessageBox.warning(
-                self,
-                "User Action Required",
-                message,
-                QMessageBox.StandardButton.Retry
-            )
-            self.procedures.prompt_reply = reply
+            msg_box.setWindowTitle("Warning")
+            msg_box.setText(message)
+            msg_box.setStandardButtons(QMessageBox.StandardButton.Retry)
+            self.procedures.prompt_reply = msg_box.exec()
             event.set()
         else:
-            QMessageBox.warning(
-                self,
-                "Configuration Error",
-                message,
-            )
+            msg_box.setWindowTitle("Error")
+            msg_box.setText(message)
+            msg_box.exec()
+
+    def request_wrapper(self, valve):
+        return lambda: self.request(valve)
+
+    def request(self, valve):
+            if valve.active:
+                self.smc_worker.request(self.smc.set, [valve.id], 0)
+            else:
+                self.smc_worker.request(self.smc.set, [valve.id], 1)
 
     def closeEvent(self, event):
         self.stop()
@@ -332,9 +326,7 @@ class Control(QWidget):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    
     window = Control(parent=None)
-
     window.show() #showMaximized()
     sys.exit(app.exec())
 

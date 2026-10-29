@@ -283,7 +283,7 @@ class Procedures:
                 return -1
             time.sleep(1.0)
 
-        self.worker.message.emit("Preheating irons")
+        self.worker.message.emit("Oxidizing iron")
         self.smc.set(self.get_idx(self.valve_lift), 1)
         status = self.wait(duration)
         if status:
@@ -404,7 +404,7 @@ class Procedures:
 
     # ----- Stage Load Samples -----
     def load_reactor(self, reactor, valve_reactor, vacuum_duration, release_duration, clean_trap_temp, clean_trap_dur, temperature, scaling, limit):
-        if len(self.valve_lines) < 2:
+        if len(self.valve_lines) < 2: # check timining of valve closing
             valve_line = self.valve_lines
         else:
             if 1 <= reactor.id <= 5: 
@@ -413,7 +413,9 @@ class Procedures:
                 valve_line = [self.valve_lines[1]]
 
         self.worker.message.emit("Evacuating trap")
-        self.smc.set(self.get_idx(self.valve_vacuum + self.valve_trap), 1)
+        self.smc.set(self.get_idx(self.valve_vacuum), 1)
+        time.sleep(0.2)
+        self.smc.set(self.get_idx(self.valve_trap), 1)
         status = self.wait(3)
         if status:
             return -1
@@ -451,13 +453,13 @@ class Procedures:
             if not self.running:
                 return -1
             self.smc.set(self.get_idx(self.valve_vacuum), 1)
-            time.sleep(0.5)
+            time.sleep(0.4)
             self.smc.set(self.get_idx(self.valve_vacuum), 0)
-            time.sleep(0.5)
+            time.sleep(0.2)
             self.smc.set(self.get_idx(valve_line), 1)
-            time.sleep(0.5)
+            time.sleep(0.4)
             self.smc.set(self.get_idx(valve_line), 0)
-            time.sleep(0.5)
+            time.sleep(0.2)
         
         pressure_CO2_final = reactor.get_value()
         self.table.set_entry(int(pressure_CO2_final * 1000), reactor.id - 1, 3)
@@ -467,22 +469,22 @@ class Procedures:
         while reactor.value is not None and reactor.get_value() < pressure_CO2_final*(scaling + 1)-0.2:
             if not self.running:
                 return -1
-            time.sleep(0.5)
+            time.sleep(0.2)
         self.smc.set(self.get_idx(self.valve_h2 + valve_line), 0)
         while reactor.value is not None and reactor.get_value() < pressure_CO2_final*(scaling + 1):
             if not self.running:
                 return -1
             self.smc.set(self.get_idx(self.valve_h2), 1)
-            time.sleep(0.5)
+            time.sleep(0.4)
             self.smc.set(self.get_idx(self.valve_h2), 0)
-            time.sleep(0.5)
+            time.sleep(0.2)
             self.smc.set(self.get_idx(valve_line), 1)
-            time.sleep(0.5)
+            time.sleep(0.4)
             self.smc.set(self.get_idx(valve_line), 0)
-            time.sleep(0.5)
+            time.sleep(0.2)
 
         self.smc.set([valve_reactor.id], 0)
-        time.sleep(0.5)
+        time.sleep(0.2)
         self.smc.set(self.get_idx(valve_line), 1)
 
         pressure_H2 = reactor.get_value()
@@ -531,10 +533,13 @@ class Procedures:
 
         self.smc.set(self.get_idx(self.valve_sampling), 0)
 
-        c, n = self.tcpip.get_c(index).split()[3], self.tcpip.get_n(index).split()[3] #respond starts with request to match
+        n = float(self.tcpip.get_n(index).split()[3])
+        c = float(self.tcpip.get_c(index).split()[3])
+        self.table.set_entry(f"{n:.3f}", reactor.id - 1, 6)
+        self.table.set_entry(f"{c:.3f}", reactor.id - 1, 7)
+
         pressure_end = reactor.get_value()
         self.table.set_entry(int(pressure_end * 1000), reactor.id - 1, 5)
-        print("C%: " + str(c) + ", N%: " + str(n)) # table?
 
         return 0
 
@@ -591,11 +596,13 @@ class Procedures:
             i += 1
 
         self.smc.close_all()
-        self.worker.message.emit("Finished loading samples")
+        self.worker.message.emit("")
         return 
 
     def remove_water(self, duration): 
-        self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 1)
+        self.smc.set(self.get_idx(self.valve_vacuum), 1)
+        time.sleep(0.2)
+        self.smc.set(self.get_idx(self.valve_reactors), 1)
         status = self.wait(duration)
         if status:
             return -1
@@ -645,7 +652,7 @@ class Procedures:
 
         self.smc.close_all()
 
-        self.worker.message.emit("Reaction finished")
+        self.worker.message.emit("")
         return 
 
         

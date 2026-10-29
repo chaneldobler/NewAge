@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt
 
 styleSheet = """
     QWidget {
-        margin: 4px;
+        margin: 2px;
         padding: 8px;
         font-size: 20px
     }
