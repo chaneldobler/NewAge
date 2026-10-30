@@ -28,7 +28,7 @@ class Procedures:
         self.helper = helper
 
         self.schematic = schematic
-        self.table = table # make function
+        self.table = table
 
         self.valve_reactors = self.schematic.valve_reactors
         self.valve_lines = self.schematic.valve_lines
@@ -42,11 +42,11 @@ class Procedures:
         self.reactors = self.schematic.reactors
 
         self.ovens = self.schematic.ovens
-        self.trap = [self.schematic.trap]
+        self.trap = self.schematic.trap
 
         self.peltiers = self.schematic.peltiers
 
-    def set_active(self): # Make getters and setters, combine?
+    def set_active(self):
         self.reactors = [r for r in self.schematic.reactors if r.active]
 
         # Close Both Lines
@@ -102,7 +102,7 @@ class Procedures:
                     clean_trap_temp = cfg["Clean Trap Temperature"]["Value"]
                     clean_trap_dur = cfg["Clean Trap Duration"]["Value"]
 
-                    if any(r.value is not None and r.get_value() < 0.8 for r in self.reactors):
+                    if any(r.get_value() < 0.8 for r in self.reactors):
                         self.worker.prompt.emit("Reactor pressure below limit.", None)
                         return
                     if clean_trap_temp > 550:
@@ -205,10 +205,7 @@ class Procedures:
                 return -1
             
             for i, r in enumerate(self.reactors):
-                if r.value is not None:
                     pressures[i] += dt * r.get_value() / duration
-                else:
-                    pressures[i] = None
             time.sleep(dt)
         return pressures
 
@@ -222,8 +219,14 @@ class Procedures:
                     self.helper.message.emit("")
                     return
                 if len(status.split()) > 1 and status.split()[1] == "ERR":
-                    self.helper.message.emit(status)
-                    return
+                    wait = threading.Event()
+                    self.helper.prompt.emit(status, wait)
+                    wait.wait()
+                    if self.prompt_reply == QMessageBox.StandardButton.Retry:
+                        continue
+                    elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
+                        self.parent.stop() # hand down?
+                        return -1
                 time.sleep(1)
                 status = self.tcpip.get_status()
 
@@ -241,9 +244,9 @@ class Procedures:
             if not self.running:
                 self.helper.message.emit("")
                 return # make better
-            if not self.valve_vortex[0].active and self.trap[0].value is not None and self.trap[0].get_value() > temperature + 3:
+            if self.trap.get_value() > temperature + 3:
                 self.smc.set(self.get_idx(self.valve_vortex), 1) 
-            elif self.valve_vortex[0].active and self.trap[0].value is not None and self.trap[0].get_value() < temperature - 3:
+            elif self.trap.get_value() < temperature - 3:
                 self.smc.set(self.get_idx(self.valve_vortex), 0)
             time.sleep(1)
         self.smc.set(self.get_idx(self.valve_vortex), 0)
@@ -254,10 +257,10 @@ class Procedures:
     def clean_trap(self, temperature, duration):
         self.helper.message.emit("Cleaning trap")
 
-        self.start_heaters(self.trap, temperature)
+        self.start_heaters([self.trap], temperature)
         self.smc.set(self.get_idx(self.valve_sampling), 1)
 
-        while self.trap[0].value is not None and self.trap[0].get_value() < temperature:
+        while self.trap.get_value() < temperature:
             if not self.running:
                 self.helper.message.emit("")
                 return
@@ -268,7 +271,7 @@ class Procedures:
             self.helper.message.emit("")
             return 
         
-        self.stop_heaters(self.trap)
+        self.stop_heaters([self.trap])
         self.smc.set(self.get_idx(self.valve_sampling), 0)
 
         self.helper.message.emit("")
@@ -278,7 +281,7 @@ class Procedures:
     def oxidize_iron(self, temperature, duration):
         self.worker.message.emit("Heating ovens")
         self.start_heaters(self.ovens, temperature)
-        while any(o.value is not None and o.get_value() < temperature for o in self.ovens):
+        while any(o.get_value() < temperature for o in self.ovens):
             if not self.running:
                 return -1
             time.sleep(1.0)
@@ -310,11 +313,9 @@ class Procedures:
             if end == -1:
                 return -1
             result = [
-                abs(start[i] - end[i]) \
-                if start[i] is not None and end[i] is not None \
-                else None for i in range(len(self.reactors))
+                abs(start[i] - end[i]) for i in range(len(self.reactors))
             ] 
-            if any(res is not None and res > limit for res in result):
+            if any(res > limit for res in result):
                 wait = threading.Event()
                 self.worker.prompt.emit("Leak limit exceeded.", wait)
                 wait.wait()
@@ -330,7 +331,7 @@ class Procedures:
         for i in range(repetitions):
             self.worker.message.emit(f"Cleaning reactors (Cycle {i+1}/{repetitions})")
             self.smc.set(self.get_idx(self.valve_h2), 1)
-            while all(r.get_value() is not None and r.value < 0.8 for r in self.reactors):
+            while all(r.get_value() < 0.8 for r in self.reactors):
                 if not self.running:
                     return -1
                 time.sleep(0.2)
@@ -427,10 +428,11 @@ class Procedures:
             return -1
         
         self.smc.set(self.get_idx(self.valve_vacuum), 0)
+        time.sleep(0.2)
 
         self.worker.message.emit("Heating trap")
-        self.start_heaters(self.trap, temperature)
-        while self.trap[0].value is not None and self.trap[0].get_value() < temperature:
+        self.start_heaters([self.trap], temperature)
+        while self.trap.get_value() < temperature:
             if not self.running:
                 return -1
             time.sleep(1)
@@ -441,23 +443,24 @@ class Procedures:
             return -1     
 
         self.smc.set(self.get_idx(self.valve_trap + valve_line), 0)
+        time.sleep(0.2)
 
-        self.stop_heaters(self.trap)
+        self.stop_heaters([self.trap])
         self.helper.request(self.clean_trap, clean_trap_temp, clean_trap_dur)
 
         pressure_CO2 = reactor.get_value()
         self.table.set_entry(int(pressure_CO2 * 1000), reactor.id - 1, 2)
 
         self.worker.message.emit("Evacuating excess load")
-        while reactor.value is not None and reactor.get_value() > limit:
+        while reactor.get_value() > limit:
             if not self.running:
                 return -1
             self.smc.set(self.get_idx(self.valve_vacuum), 1)
-            time.sleep(0.4)
+            time.sleep(0.2)
             self.smc.set(self.get_idx(self.valve_vacuum), 0)
             time.sleep(0.2)
             self.smc.set(self.get_idx(valve_line), 1)
-            time.sleep(0.4)
+            time.sleep(0.2)
             self.smc.set(self.get_idx(valve_line), 0)
             time.sleep(0.2)
         
@@ -466,20 +469,21 @@ class Procedures:
 
         self.worker.message.emit("Loading hydrogen")
         self.smc.set(self.get_idx(self.valve_h2 + valve_line), 1)
-        while reactor.value is not None and reactor.get_value() < pressure_CO2_final*(scaling + 1)-0.2:
+        while reactor.get_value() < pressure_CO2_final*(scaling + 1)-0.1:
             if not self.running:
                 return -1
             time.sleep(0.2)
         self.smc.set(self.get_idx(self.valve_h2 + valve_line), 0)
-        while reactor.value is not None and reactor.get_value() < pressure_CO2_final*(scaling + 1):
+        time.sleep(0.1)
+        while reactor.get_value() < pressure_CO2_final*(scaling + 1):
             if not self.running:
                 return -1
             self.smc.set(self.get_idx(self.valve_h2), 1)
-            time.sleep(0.4)
+            time.sleep(0.2)
             self.smc.set(self.get_idx(self.valve_h2), 0)
             time.sleep(0.2)
             self.smc.set(self.get_idx(valve_line), 1)
-            time.sleep(0.4)
+            time.sleep(0.2)
             self.smc.set(self.get_idx(valve_line), 0)
             time.sleep(0.2)
 
@@ -494,7 +498,7 @@ class Procedures:
 
     def sampling(self, reactor, index):
         self.worker.message.emit("Waiting for trap to cool")
-        while self.trap[0].value is not None and self.trap[0].get_value() > 50:
+        while self.trap.get_value() > 50:
             if not self.running:
                 return -1
             time.sleep(1)
@@ -557,8 +561,14 @@ class Procedures:
                     self.worker.message.emit("")
                     return
                 if len(status.split()) > 1 and status.split()[1] == "ERR":
-                    self.worker.message.emit(status)
-                    return
+                    wait = threading.Event()
+                    self.worker.prompt.emit(status, wait)
+                    wait.wait()
+                    if self.prompt_reply == QMessageBox.StandardButton.Retry:
+                        continue
+                    elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
+                        self.parent.stop() # hand down?
+                        return -1
                 time.sleep(1)
                 status = self.tcpip.get_status()
 
@@ -600,9 +610,7 @@ class Procedures:
         return 
 
     def remove_water(self, duration): 
-        self.smc.set(self.get_idx(self.valve_vacuum), 1)
-        time.sleep(0.2)
-        self.smc.set(self.get_idx(self.valve_reactors), 1)
+        self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 1)
         status = self.wait(duration)
         if status:
             return -1
@@ -617,7 +625,7 @@ class Procedures:
         
         self.worker.message.emit("Heating ovens")
         self.start_heaters(self.ovens, reaction_temp)
-        while any(o.value is not None and o.get_value() < reaction_temp for o in self.ovens):
+        while any(o.get_value() < reaction_temp for o in self.ovens):
             if not self.running:
                 self.worker.message.emit("")
                 return 
@@ -636,7 +644,7 @@ class Procedures:
         self.stop_heaters(self.ovens)
 
         # self.worker.message.emit("Waiting for reactor pressure to fall below limit")
-        # while any(r.value is not None and r.get_value() > end_press_limit for r in self.reactors):
+        # while any(r.get_value() > end_press_limit for r in self.reactors):
         #     if not self.running:
         #         self.worker.message.emit("")
         #         return

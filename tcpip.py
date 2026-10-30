@@ -26,7 +26,7 @@ class TcpIp:
         locker = QMutexLocker(self.mutex)
         
         if not self._ensure_connected():
-            return ""
+            return "not connected"
 
         try:
             formatted_cmd = (command.strip() + "\r\n").encode('utf-8')
@@ -37,14 +37,14 @@ class TcpIp:
                 return data.decode('utf-8', errors='ignore').strip()
             
             self._close_socket()
-            return ""
+            return "empty reply"
 
         except socket.timeout:
             self._close_socket()
-            return ""
+            return "timeout"
         except Exception as e:
             self._close_socket()
-            return ""
+            return str(e)
 
     def _close_socket(self):
         if self.socket:
@@ -89,4 +89,4 @@ class TcpIp:
 
 if __name__ == "__main__":
     tcpip = TcpIp()
-    print(tcpip.sleep())
+    print(tcpip.get_status())

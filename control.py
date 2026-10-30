@@ -14,24 +14,34 @@ class History(QWidget):
     def __init__(self, parent, pressures):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(2000, 1300)
+        self.setFixedSize(1600, 1100)
         self.pressures = pressures
         self.history = [[] for _ in self.pressures]
+
         self.start = 0
         self.end = 0
         self.stamp = 0
         self.time = []
 
+        self.i = 0
+        self.len = 4
+        self.avgs = [0 for _ in self.pressures]
+
         self.graph = pg.PlotWidget()
-        self.graph.setLabel('left', 'Pressure', units='bar')
-        self.graph.setLabel('bottom', 'Time', units='min') 
+        self.graph.setLabel('left', 'Pressure', units='bar', **{'color': 'grey', 'font-size': '18pt'})
+        self.graph.setLabel('bottom', 'Time', units='min', **{'color': 'grey', 'font-size': '18pt'}) 
         self.graph.setBackground('w')
-        self.graph.setYRange(0, 2)
-        self.graph.addLegend()
+        self.graph.getViewBox().setLimits(xMin=0)
+        self.graph.setYRange(0, 2.1)
+        self.graph.addLegend(labelTextSize='14pt')
+        axis_font = QFont()
+        axis_font.setPointSize(14)  # Adjust number size here
+        self.graph.getAxis('left').setStyle(tickFont=axis_font)
+        self.graph.getAxis('bottom').setStyle(tickFont=axis_font)
 
         self.curves = []
         for p in self.pressures:
-            pen = pg.mkPen(color=p.color, width=1)
+            pen = pg.mkPen(color=p.color, width=3)
             curve = self.graph.plot(pen=pen, name=f"R{p.id}")
             self.curves.append(curve)
 
@@ -39,31 +49,45 @@ class History(QWidget):
         self.container.addWidget(self.graph, 0, 0)
 
     def set_stamp(self, _):
-        for p in self.pressures:
-            if not p.active or p.value is None:
-                val = float('nan')
-            else: 
-                val = p.get_value()
-            self.history[p.id - 1].append(val)
+        self.i += 1
 
-        self.end = time.time()
-        self.stamp = self.stamp + self.end - self.start if len(self.time) > 0 else 0
-        self.start = self.end
-        self.time.append(self.stamp/60)
+        for i, p in enumerate(self.pressures):
+            self.avgs[i] += p.get_value() / self.len
 
-        for i, curve in enumerate(self.curves):
-            if i < len(self.history):
-                curve.setData(self.time, self.history[i])
+        if self.i == self.len:            
+            self.end = time.time()
+            self.stamp = self.stamp + self.end - self.start if len(self.time) > 0 else 0
+            self.start = self.end
+            self.time.append(self.stamp / 60)
+
+            for i, p in enumerate(self.pressures):
+                if not p.active:
+                    val = float('nan')
+                else: 
+                    val = self.avgs[i]
+                self.history[i].append(val)
+
+            for i, curve in enumerate(self.curves):
+                if i < len(self.history):
+                    curve.setData(self.time, self.history[i])
+
+            self.i = 0
+            self.avgs = [0 for _ in self.pressures]
 
     def reset(self):
         self.history = [[] for _ in self.pressures]
         self.time = []
 
+        self.i = 0
+        self.avgs = [0 for _ in self.pressures]
+
+        self.graph.setYRange(0, 2.1)
+
 class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(2000, 700)
+        self.setFixedSize(1600, 700)
         self.headers = ["Sample Name", "Weight [mg]", "CO2 [mbar]", "CO2 fin [mbar]", "CO2 + H2 [mbar]", "p end [mbar]", "N [%]", "C [%]"]
         self.reactors = [f"Reactor {i+1}" for i in range(10)]
 
@@ -84,23 +108,23 @@ class Table(QWidget):
             QTableView, QHeaderView, QHeaderView::section, QTableCornerButton::section {
                 background-color: white;
                 color: black;
-                font-size: 22px;
+                font-size: 20px;
                 border: none;
             }
             QTableView {
                 gridline-color: grey;
             }
             QTableView::item {
-                padding-top: 4px;
-                padding-bottom: 4px;
-                padding-left: 16px;
-                padding-right: 16px;
+                padding-top: 8px;
+                padding-bottom: 8px;
+                padding-left: 8px;
+                padding-right: 8px;
             }
             QHeaderView::section, QTableCornerButton::section {
                 padding-top: 16px;
                 padding-bottom: 16px;
-                padding-left: 32px;
-                padding-right: 32px;
+                padding-left: 16px;
+                padding-right: 16px;
                 border-right: 1px solid grey;
                 border-bottom: 1px solid grey;
             }
@@ -129,7 +153,7 @@ class Display(QFrame):
 
         self.title = c.Title(label, alignment=Qt.AlignmentFlag.AlignCenter)
         self.start =  QPushButton("Start")
-        self.stop = QPushButton("Stop")
+        self.stop = QPushButton("Abort")
         self.reset = QPushButton("Reset")
         self.conditioning = QPushButton("Conditioning")
         self.load_samples = QPushButton("Load Samples")
@@ -150,12 +174,12 @@ class Activity(QFrame):
         self.parent = parent
 
         self.title = c.Title("Activity", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.worker_label = QLabel("Worker")
-        self.helper_label = QLabel("Helper")
+        self.worker_label = QLabel("Worker", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.helper_label = QLabel("Helper", alignment=Qt.AlignmentFlag.AlignCenter)
         self.worker_display = c.Body("", alignment=Qt.AlignmentFlag.AlignLeft)
         self.helper_display = c.Body("", alignment=Qt.AlignmentFlag.AlignLeft)
-        self.worker_display.setFixedWidth(500)
-        self.helper_display.setFixedWidth(500)
+        self.worker_display.setFixedWidth(400)
+        self.helper_display.setFixedWidth(400)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.title, 0, 0, 1, 2)
@@ -246,6 +270,7 @@ class Control(QWidget):
         self.worker.message.connect(self.panel.activity.set_worker)
         self.helper.message.connect(self.panel.activity.set_helper)
         self.worker.prompt.connect(self.prompt)
+        self.helper.prompt.connect(self.prompt)
         self.smc_worker.update.connect(self.schematic.set_valves_active)
         self.keller_worker.update.connect(self.schematic.set_reactor_values)
         self.tm_worker.update.connect(self.schematic.set_heater_values)
@@ -276,6 +301,7 @@ class Control(QWidget):
         self.peltier.stop()
 
     def reset(self):
+    # if not self.procedures.running and self.worker.requests.empty():
         self.table.reset()
         self.graph.reset()
         for r in self.schematic.reactors:
@@ -327,6 +353,6 @@ class Control(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = Control(parent=None)
-    window.show() #showMaximized()
+    window.showMaximized()
     sys.exit(app.exec())
 

@@ -1,8 +1,4 @@
-import sys
-
-from PySide6.QtWidgets import QLabel, QPushButton, QFrame, QGridLayout, QWidget, QApplication, QSizePolicy
-from PySide6.QtGui import QColor
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel
 
 styleSheet = """
     QWidget {
