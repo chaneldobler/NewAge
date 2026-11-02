@@ -33,7 +33,7 @@ class Valve(QWidget):
         QPushButton {{
             color: {color};
             background-color: {bg_color};
-            border-radius: 22px;
+            border-radius: 23px;
             border: 1px solid grey;
         }}
         QPushButton:hover {{
@@ -123,6 +123,28 @@ class Value:
         text = str(self.get_value())
         self.display.setText(text)
 
+class Toggle(ActiveRunning):
+    def __init__(self, active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
+        super().__init__(**kwargs)
+        self.active_txt = active_txt
+        self.inactive_txt = inactive_txt
+
+        self.button = QPushButton(self.active_txt)
+        self.button.clicked.connect(self.toggle)
+
+        self.container.addWidget(self.button, 2, 0, 1, 2)
+
+    def set_text(self):
+        if self.active:
+            self.button.setText(self.active_txt)
+        else: 
+            self.button.setText(self.inactive_txt)
+        self.set_color()
+
+    def toggle(self):
+        self.active = not self.active
+        self.set_text()
+
 class Peltier(ActiveRunning, Symbol):
     def __init__(self, name: str = "Peltier", color: str = QColor.fromHslF(0.6, 0.95, 0.45).name(), nr: int = 1, **kwargs):
         super().__init__(name = f"{name} {nr}", color = color, nr = nr, **kwargs)
@@ -135,28 +157,21 @@ class Oven(ActiveRunning, Value, Symbol):
     def __init__(self, name: str = "Oven", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), nr: int = 1, unit: str = "\u00b0C", **kwargs):
         super().__init__(name = f"{name} {nr}", color = color, nr = nr, unit = unit, **kwargs)
 
-class Reactor(Active, Value, Symbol):
+class Reactor(Toggle, Value, Symbol):
     def __init__(self, name: str = "Reactor", color: str = "grey", id: int = 0, nr: int = 1, unit = "mbar", **kwargs):
         super().__init__(name = f"{name} {nr}", color = QColor.fromHslF(((id + 4)/12) % 1, 0.95, 0.45).name(), id = id, nr = nr, unit = unit, **kwargs)
-        self.offset = 0
-        self.slope = 1
+        self.offset = 0.0
+        self.slope = 1.0
 
-        self.button = QPushButton("Deactivate")
-        self.button.clicked.connect(self.toggle)
+        self.set_running(True)
 
-        self.container.addWidget(self.button, 2, 0, 1, 2)
-
-    def toggle(self):
-        self.active = not self.active
-        if self.active:
-            self.button.setText("Deactivate")
-        else: 
-            self.button.setText("Activate")
-        self.set_color()
+    def set(self, offset: float = 0.0, slope: float = 1.0):
+        self.offset = offset
+        self.slope = slope
 
     def reset(self):
-        self.offset = 0
-        self.slope = 1
+        self.offset = 0.0
+        self.slope = 1.0
 
     def get_value(self):
         return self.slope*(self.value - self.offset)
@@ -166,36 +181,18 @@ class Reactor(Active, Value, Symbol):
         text = f"{int(self.get_value() * 1000)}"
         self.display.setText(text)
 
-class Reactor(Active, Value, Symbol):
-    def __init__(self, name: str = "Reactor", color: str = "grey", id: int = 0, nr: int = 1, unit = "mbar", **kwargs):
-        super().__init__(name = f"{name} {nr}", color = QColor.fromHslF(((id + 4)/12) % 1, 0.95, 0.45).name(), id = id, nr = nr, unit = unit, **kwargs)
-        self.offset = 0
-        self.slope = 1
+class Display(Running, Symbol):
+    def __init__(self, color: str = QColor.fromHslF(0.4, 0.9, 0.3).name(), **kwargs):
+        super().__init__(color=color, **kwargs)
+        self.display = c.Body("")
 
-        self.button = QPushButton("Deactivate")
-        self.button.clicked.connect(self.toggle)
+        self.container.addWidget(self.display, 1, 0, 1, 2)
 
-        self.container.addWidget(self.button, 2, 0, 1, 2)
+        self.set_running(False)
 
-    def toggle(self):
-        self.active = not self.active
-        if self.active:
-            self.button.setText("Deactivate")
-        else: 
-            self.button.setText("Activate")
-        self.set_color()
-
-    def reset(self):
-        self.offset = 0
-        self.slope = 1
-
-    def get_value(self):
-        return self.slope*(self.value - self.offset)
-
-    def set_value(self, val: float):
-        self.value = val
-        text = f"{int(self.get_value() * 1000)}"
-        self.display.setText(text)
+class Auto(Toggle, Symbol):
+    def __init__(self, color: str = QColor.fromHslF(0.6, 0.9, 0.3).name(), **kwargs):
+        super().__init__(color=color, **kwargs)
 
 class Schematic(QWidget):
     def __init__(self, parent):
@@ -235,6 +232,13 @@ class Schematic(QWidget):
         self.vacuum = Symbol(parent=self, name="Vac")
         self.ea = Symbol(parent=self, name="EA")
 
+        with open("settings.json", "r") as f:
+            settings = json.load(f)
+        for i, data in enumerate(settings["Reactors"].values()):
+            offset = data["Offset"]
+            slope = data["Slope"]
+            self.reactors[i].set(offset, slope)
+            
         # ----- Layout ------
         self.grid = QGridLayout(self)
 
@@ -303,7 +307,7 @@ class Schematic(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        pen = QPen(QColor("grey"), 1)
+        pen = QPen(QColor("grey"), 4)
         painter.setPen(pen)
 
         # Top and Bottom Lines

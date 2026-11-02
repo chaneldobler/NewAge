@@ -1,0 +1,44 @@
+{
+  "Reactors": {
+    "Reactor 1": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 2": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 3": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 4": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 5": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 6": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 7": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 8": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 9": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    },
+    "Reactor 10": {
+      "Offset": 0.0,
+      "Slope": 1.0
+    }
+  }
+}

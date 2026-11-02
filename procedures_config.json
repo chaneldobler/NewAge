@@ -75,8 +75,8 @@
       "Unit": "s"
     },
     "End Pressure Limit": {
-      "Value": 0.18,
-      "Default": 0.18,
+      "Value": 0.05,
+      "Default": 0.05,
       "Unit": "bar"
     },
     "Water Removal Duration": {

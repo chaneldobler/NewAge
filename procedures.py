@@ -9,14 +9,13 @@ from PySide6.QtCore import QObject, Signal, Slot
 from PySide6.QtWidgets import QMessageBox
 
 class Procedures:
-    def __init__(self, parent, tcpip, smc, keller, tm, peltier, worker, helper, table, schematic):
+    def __init__(self, parent, tcpip, smc, keller, tm, peltier, worker, helper, table, schematic, panel):
         self.parent = parent
         self.filename = "procedures_config.json"
 
         self.running = False
         self.trap_cooling = False
         self.prompt_reply = None
-        self.procedures = []
 
         self.tcpip = tcpip
         self.smc = smc
@@ -29,6 +28,7 @@ class Procedures:
 
         self.schematic = schematic
         self.table = table
+        self.panel = panel
 
         self.valve_reactors = self.schematic.valve_reactors
         self.valve_lines = self.schematic.valve_lines
@@ -80,7 +80,7 @@ class Procedures:
             self.set_active()
             self.worker.request(self.smc.set, self.get_idx(self.valve_reactors), active)       
 
-    def start(self, names):
+    def start(self):
         if self.worker.requests.empty():
             with open(self.filename, "r") as f:
                 self.config = json.load(f)
@@ -88,78 +88,81 @@ class Procedures:
             self.set_active()
             funcs = []
 
-            for name in names:
-                if name == "Conditioning":
-                    cfg = self.config["Conditioning"]
-                    cond_oven_temp = cfg["Conditioning Oven Temperature"]["Value"]
-                    preheat_iron_dur = cfg["Preheating Iron Duration"]["Value"]
-                    reactors_evac_dur = cfg["Reactors Evacuation Duration"]["Value"]
-                    leak_test_dur = cfg["Leak Test Duration"]["Value"]
-                    leak_press_limit = cfg["Leak Pressure Limit"]["Value"]
-                    h2_cycle_reps = cfg["H2 Cycle Repetitions"]["Value"]
-                    h2_cycle_dur = cfg["H2 Cycle Duration"]["Value"]
-                    cfg = self.config["Separate"]
-                    clean_trap_temp = cfg["Clean Trap Temperature"]["Value"]
-                    clean_trap_dur = cfg["Clean Trap Duration"]["Value"]
+            cfg = self.config["Conditioning"]
+            cond_oven_temp = cfg["Conditioning Oven Temperature"]["Value"]
+            preheat_iron_dur = cfg["Preheating Iron Duration"]["Value"]
+            reactors_evac_dur = cfg["Reactors Evacuation Duration"]["Value"]
+            leak_test_dur = cfg["Leak Test Duration"]["Value"]
+            leak_press_limit = cfg["Leak Pressure Limit"]["Value"]
+            h2_cycle_reps = cfg["H2 Cycle Repetitions"]["Value"]
+            h2_cycle_dur = cfg["H2 Cycle Duration"]["Value"]
+            cfg = self.config["Separate"]
+            clean_trap_temp = cfg["Clean Trap Temperature"]["Value"]
+            clean_trap_dur = cfg["Clean Trap Duration"]["Value"]
 
-                    if any(r.get_value() < 0.8 for r in self.reactors):
-                        self.worker.prompt.emit("Reactor pressure below limit.", None)
-                        return
-                    if clean_trap_temp > 550:
-                        self.worker.prompt.emit("Trap cleaning temperature exceeds limit.", None)
-                        return
-                    if cond_oven_temp > 650:
-                        self.worker.prompt.emit("Oven conditioning temperature exceeds limit.", None)
-                        return
+            if any(r.get_value() < 0.8 for r in self.reactors):
+                self.worker.prompt.emit("Reactor pressure below limit.", None)
+                self.parent.stop()
+                return
+            if clean_trap_temp > 550:
+                self.worker.prompt.emit("Trap cleaning temperature exceeds limit.", None)
+                self.parent.stop()
+                return
+            if cond_oven_temp > 650:
+                self.worker.prompt.emit("Oven conditioning temperature exceeds limit.", None)
+                self.parent.stop()
+                return
 
-                    args = (
-                        cond_oven_temp, preheat_iron_dur, reactors_evac_dur, 
-                        leak_test_dur, leak_press_limit, h2_cycle_reps, 
-                        h2_cycle_dur, clean_trap_temp, clean_trap_dur
-                    )
-                    funcs.append((self.conditioning, args))
+            args = (
+                cond_oven_temp, preheat_iron_dur, reactors_evac_dur, 
+                leak_test_dur, leak_press_limit, h2_cycle_reps, 
+                h2_cycle_dur, clean_trap_temp, clean_trap_dur
+            )
+            funcs.append((self.conditioning, args))
 
-                elif name == "Load Samples":
-                    cfg = self.config["Load Samples"]
-                    trap_vac_dur = cfg["Trap Vacuum Duration"]["Value"]
-                    trap_release_dur = cfg["Trap Release Duration"]["Value"]
-                    trap_heating_temp = cfg["Trap Heating Temperature"]["Value"]
-                    co2_press_scaling = cfg["CO2 Pressure Scaling"]["Value"]
-                    load_press_limit = cfg["Load Pressure Limit"]["Value"]
-                    cfg = self.config["Separate"]
-                    clean_trap_temp = cfg["Clean Trap Temperature"]["Value"]
-                    clean_trap_dur = cfg["Clean Trap Duration"]["Value"]
-                    trap_cooling_temp = cfg["Trap Cooling Temperature"]["Value"]
+            cfg = self.config["Load Samples"]
+            trap_vac_dur = cfg["Trap Vacuum Duration"]["Value"]
+            trap_release_dur = cfg["Trap Release Duration"]["Value"]
+            trap_heating_temp = cfg["Trap Heating Temperature"]["Value"]
+            co2_press_scaling = cfg["CO2 Pressure Scaling"]["Value"]
+            load_press_limit = cfg["Load Pressure Limit"]["Value"]
+            cfg = self.config["Separate"]
+            clean_trap_temp = cfg["Clean Trap Temperature"]["Value"]
+            clean_trap_dur = cfg["Clean Trap Duration"]["Value"]
+            trap_cooling_temp = cfg["Trap Cooling Temperature"]["Value"]
 
-                    if trap_heating_temp > 550:
-                        self.worker.message.emit("Trap heating temperature exceeds limit.", None)
-                        return
-                    if clean_trap_temp > 550:
-                        self.worker.message.emit("Trap cleaning temperature exceeds limit.", None)
-                        return
+            if trap_heating_temp > 550:
+                self.worker.prompt.emit("Trap heating temperature exceeds limit.", None)
+                self.parent.stop()
+                return
+            if clean_trap_temp > 550:
+                self.worker.prompt.emit("Trap cleaning temperature exceeds limit.", None)
+                self.parent.stop()
+                return
 
-                    args = (
-                        trap_vac_dur, trap_release_dur, trap_heating_temp, 
-                        co2_press_scaling, clean_trap_temp, clean_trap_dur,
-                        trap_cooling_temp, load_press_limit
-                    )
-                    funcs.append((self.load_samples, args))
+            args = (
+                trap_vac_dur, trap_release_dur, trap_heating_temp, 
+                co2_press_scaling, clean_trap_temp, clean_trap_dur,
+                trap_cooling_temp, load_press_limit
+            )
+            funcs.append((self.load_samples, args))
 
-                elif name == "Reaction":
-                    cfg = self.config["Reaction"]
-                    reaction_temp = cfg["Reaction Temperature"]["Value"]
-                    reaction_dur = cfg["Reaction Duration"]["Value"]
-                    end_press_limit = cfg["End Pressure Limit"]["Value"]
-                    water_removal_dur = cfg["Water Removal Duration"]["Value"]
+            cfg = self.config["Reaction"]
+            reaction_temp = cfg["Reaction Temperature"]["Value"]
+            reaction_dur = cfg["Reaction Duration"]["Value"]
+            end_press_limit = cfg["End Pressure Limit"]["Value"]
+            water_removal_dur = cfg["Water Removal Duration"]["Value"]
 
-                    if reaction_temp > 650:
-                        self.worker.prompt.emit("Reaction temperature exceeds limit.", None)
-                        return
+            if reaction_temp > 650:
+                self.worker.prompt.emit("Reaction temperature exceeds limit.", None)
+                self.parent.stop()
+                return
 
-                    args = (reaction_temp, reaction_dur, end_press_limit, water_removal_dur)
-                    funcs.append((self.reaction, args))
+            args = (reaction_temp, reaction_dur, end_press_limit, water_removal_dur)
+            funcs.append((self.reaction, args))
 
             self.running = True 
+            self.panel.worker.set_running(True)
             for f, args in funcs:
                 self.worker.request(f, *args)
             return
@@ -211,12 +214,14 @@ class Procedures:
 
     # ----- Parallel Procedures -----
     def process_runin(self):
+        self.panel.helper.set_running(True)
         self.helper.message.emit("Processing runins")
         for _ in self.reactors:
             status = self.tcpip.get_status()
             while status != "STS READY":
                 if not self.running:
                     self.helper.message.emit("")
+                    self.panel.helper.set_running(False)
                     return
                 if len(status.split()) > 1 and status.split()[1] == "ERR":
                     wait = threading.Event()
@@ -225,8 +230,9 @@ class Procedures:
                     if self.prompt_reply == QMessageBox.StandardButton.Retry:
                         continue
                     elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                        self.parent.stop() # hand down?
-                        return -1
+                        self.parent.stop()
+                        self.panel.helper.set_running(False)
+                        return
                 time.sleep(1)
                 status = self.tcpip.get_status()
 
@@ -236,14 +242,17 @@ class Procedures:
                 self.tcpip.start()
 
         self.helper.message.emit("")
+        self.panel.helper.set_running(False)
         return
 
     def cool_trap(self, temperature):
+        self.panel.helper.set_running(True)
         self.helper.message.emit("Cooling trap")
         while self.trap_cooling:
             if not self.running:
                 self.helper.message.emit("")
-                return # make better
+                self.panel.helper.set_running(False)
+                return
             if self.trap.get_value() > temperature + 3:
                 self.smc.set(self.get_idx(self.valve_vortex), 1) 
             elif self.trap.get_value() < temperature - 3:
@@ -252,9 +261,11 @@ class Procedures:
         self.smc.set(self.get_idx(self.valve_vortex), 0)
 
         self.helper.message.emit("")
+        self.panel.helper.set_running(False)
         return
 
     def clean_trap(self, temperature, duration):
+        self.panel.helper.set_running(True)
         self.helper.message.emit("Cleaning trap")
 
         self.start_heaters([self.trap], temperature)
@@ -263,18 +274,21 @@ class Procedures:
         while self.trap.get_value() < temperature:
             if not self.running:
                 self.helper.message.emit("")
+                self.panel.helper.set_running(False) #make signal?
                 return
             time.sleep(1)
 
         status = self.wait(duration)
         if status:
             self.helper.message.emit("")
+            self.panel.helper.set_running(False)
             return 
         
         self.stop_heaters([self.trap])
         self.smc.set(self.get_idx(self.valve_sampling), 0)
 
         self.helper.message.emit("")
+        self.panel.helper.set_running(False)
         return
 
     # ----- Conditioning Procedures ----- 
@@ -363,22 +377,34 @@ class Procedures:
         offsets = self.get_average_pressure()
         if offsets == -1:
             return -1
-        
+
+        with open("settings.json", "r") as f:
+            settings = json.load(f) # put somewhere else?
+
         for i, r in enumerate(self.reactors):
             if i < len(offsets):
                 r.offset = offsets[i]
+                settings["Reactors"][f"Reactor {i+1}"]["Offset"] = offsets[i]
+
+        with open("settings.json", "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+
         self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 0)
         return 0
 
     def conditioning(self, cond_oven_temp, preheat_iron_dur, reactors_evac_dur, 
                             leak_test_dur, leak_press_limit, h2_cycle_reps, 
                             h2_cycle_dur, clean_trap_temp, clean_trap_dur):
+        if not self.panel.conditioning.active:
+            self.parent.stop()
+            return
+        self.panel.conditioning.set_running(True)
         self.smc.close_all()
         self.smc.set([v.id for v in self.valve_lines], 1)
 
         status = self.oxidize_iron(cond_oven_temp, preheat_iron_dur)
         if status:
-            self.worker.message.emit("")
+            self.worker.message.emit("") # move to parent stop
             return
 
         self.helper.request(self.clean_trap, clean_trap_temp, clean_trap_dur)
@@ -401,6 +427,9 @@ class Procedures:
 
         self.smc.close_all()
         self.worker.message.emit("")
+        self.panel.conditioning.set_running(False)
+        if not self.panel.auto.active:
+            self.parent.stop()
         return
 
     # ----- Stage Load Samples -----
@@ -542,13 +571,14 @@ class Procedures:
         self.table.set_entry(f"{n:.3f}", reactor.id - 1, 6)
         self.table.set_entry(f"{c:.3f}", reactor.id - 1, 7)
 
-        pressure_end = reactor.get_value()
-        self.table.set_entry(int(pressure_end * 1000), reactor.id - 1, 5)
-
         return 0
 
     def load_samples(self, trap_vac_dur, trap_release_dur, trap_heating_temp, 
                         co2_press_scaling, clean_trap_temp, clean_trap_dur, trap_cooling_temp, load_press_limit):
+        if not self.panel.load_samples.active:
+            self.parent.stop()
+            return
+        self.panel.load_samples.set_running(True)
         self.smc.close_all()
         self.smc.set(self.get_idx(self.valve_lines), 1)
 
@@ -580,6 +610,14 @@ class Procedures:
 
             self.trap_cooling = True
             self.helper.request(self.cool_trap, trap_cooling_temp)
+
+            while not self.panel.sampling.active:
+                if not self.running:
+                    self.worker.message.emit("")
+                    self.trap_cooling = False
+                    return 
+                time.sleep(1)
+
             status = self.sampling(self.reactors[i], index)
             if status:
                 self.worker.message.emit("")
@@ -594,6 +632,12 @@ class Procedures:
             if name.lower() == "first":
                 continue
 
+            while not self.panel.load_reactor.active:
+                if not self.running:
+                    self.worker.message.emit("")
+                    return 
+                time.sleep(1)
+
             status = self.load_reactor(
                 self.reactors[i], self.valve_reactors[i],
                 trap_vac_dur, trap_release_dur, clean_trap_temp,
@@ -607,6 +651,9 @@ class Procedures:
 
         self.smc.close_all()
         self.worker.message.emit("")
+        self.panelload_samples.set_running(False)
+        if not self.panel.auto.active:
+            self.parent.stop()
         return 
 
     def remove_water(self, duration): 
@@ -618,6 +665,10 @@ class Procedures:
         return 0
         
     def reaction(self, reaction_temp, reaction_dur, end_press_limit, water_removal_dur):
+        if not self.panel.reaction.active:
+            self.parent.stop()
+            return
+        self.panel.reaction.set_running(True)
         self.smc.close_all()
         self.smc.set(self.get_idx(self.valve_lift + self.valve_lines), 1)
 
@@ -643,12 +694,26 @@ class Procedures:
         self.smc.set(self.get_idx(self.valve_lift), 0)
         self.stop_heaters(self.ovens)
 
-        # self.worker.message.emit("Waiting for reactor pressure to fall below limit")
-        # while any(r.get_value() > end_press_limit for r in self.reactors):
-        #     if not self.running:
-        #         self.worker.message.emit("")
-        #         return
-        #     time.sleep(1)
+        status = self.wait(180)
+        if status:
+            self.worker.message.emit("")
+            return
+
+        for r in self.reactors:
+            pressure_end = r.get_value()
+            self.table.set_entry(int(pressure_end * 1000), r.id - 1, 5)
+
+        if any(r.get_value() > int(self.table.get_entry(r.id-1, 4)) - 3*int(self.table.get_entry(r.id-1, 2)) + 3*1000*end_press_limit for r in self.reactors):
+            if not self.running:
+                self.worker.message.emit("")
+                return
+            wait = threading.Event()
+            self.worker.prompt.emit("Remaining pressure exceeds expectation.", wait)
+            wait.wait() # retry equals continue
+            if self.prompt_reply == QMessageBox.StandardButton.Cancel:
+                self.parent.stop() # hand down?
+                return -1
+            time.sleep(1)
 
         self.worker.message.emit("Removing water")
         status = self.remove_water(water_removal_dur)
@@ -661,6 +726,9 @@ class Procedures:
         self.smc.close_all()
 
         self.worker.message.emit("")
+        self.panel.reaction.set_running(False)
+        if not self.panel.auto.active:
+            self.parent.stop()
         return 
 
         
