@@ -3,18 +3,20 @@ import time
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QAbstractItemView, QLabel, QGridLayout, QTableView, QHeaderView, QMessageBox
 from PySide6.QtGui import QStandardItem, QStandardItemModel, QFont, QColor
 from PySide6.QtCore import Qt
+from datetime import datetime
 import pyqtgraph as pg
 import keller, smc, tm, peltier, tcpip
 import worker
 import procedures
 import schematic
 import components as c
+import database as db
 
 class History(QWidget):
     def __init__(self, parent, pressures):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1600, 1100)
+        self.setFixedSize(1700, 1100)
         self.pressures = pressures
         self.history = [[] for _ in self.pressures]
 
@@ -24,8 +26,8 @@ class History(QWidget):
         self.time = []
 
         self.graph = pg.PlotWidget()
-        self.graph.setLabel('left', 'Pressure', units='bar', **{'color': 'grey', 'font-size': '18pt'})
-        self.graph.setLabel('bottom', 'Time', units='min', **{'color': 'grey', 'font-size': '18pt'}) 
+        self.graph.setLabel('left', 'Pressure', units='bar', **{'color': 'black', 'font-size': '18pt'})
+        self.graph.setLabel('bottom', 'Time', units='min', **{'color': 'back', 'font-size': '18pt'}) 
         self.graph.setBackground('w')
         self.graph.getViewBox().setLimits(xMin=0)
         self.graph.setYRange(0, 2.1)
@@ -71,8 +73,11 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1600, 600)
-        self.headers = ["Sample Name", "Weight [mg]", "CO2 [mbar]", "CO2 fin [mbar]", "CO2 + H2 [mbar]", "p end [mbar]", "N [%]", "C [%]"]
+        self.setFixedSize(1700, 600)
+
+        self.db = db.Database()
+
+        self.headers = ["Sample Name", "Weight [mg]", "CO2 [mbar]", "CO2 fin [mbar]", "CO2 + H2 [mbar]", "p end [mbar]", "N [%]", "C [%]", "C / N"]
         self.reactors = [f"Reactor {i+1}" for i in range(10)]
 
         self.model = QStandardItemModel(len(self.reactors), len(self.headers))
@@ -124,8 +129,8 @@ class Table(QWidget):
         item = self.model.item(row, col)
         return item.text() if item is not None else ""
 
-    def set_entry(self, text, row, col):
-        item = QStandardItem(str(text))
+    def set_entry(self, val, row, col):
+        item = QStandardItem(str(val))
         item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.model.setItem(row, col, item)
 
@@ -133,6 +138,35 @@ class Table(QWidget):
         for row in range(self.model.rowCount()):
             for col in range(self.model.columnCount()):
                 self.model.setItem(row, col, None)
+
+    def store(self):
+        map = {
+            1: "weight",
+            2: "co2_init",
+            3: "co2_final",
+            4: "hydro_init",
+            5: "hydro_final",
+            6: "conc_n",
+            7: "conc_c",
+            8: "cn_ratio"
+        }
+
+        for i in range(self.model.rowCount()):
+            name = self.get_entry(i, 0)
+            if not name:
+                continue
+
+            sample_nr, prep_nr, target_nr = name.split(".")
+            self.db.store(int(sample_nr), int(prep_nr), int(target_nr), "reactor_nr", i + 101)
+
+            for j, category in map.items():
+                val = self.get_entry(i, j)
+                if not val:
+                    continue
+
+                self.db.store(int(sample_nr), int(prep_nr), int(target_nr), category, float(val))
+
+            self.db.store(int(sample_nr), int(prep_nr), int(target_nr), "graphitized", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 class Reactors(QFrame):
     def __init__(self, parent):
@@ -166,37 +200,45 @@ class Panel(QWidget):
         self.reset = QPushButton("Reset")
         self.reactors = Reactors(self)
         self.auto = schematic.Auto(parent=self, name="Automatic")
-        self.conditioning = schematic.Auto(parent=self, name="Conditioning")
-        self.load_samples = schematic.Auto(parent=self, name="Load Samples")
+        self.conditioning = schematic.Auto(
+            parent=self, 
+            name="Conditioning",
+        )
+        self.load_samples = schematic.Auto(
+            parent=self, 
+            name="Load Samples",       
+        )
+        self.reaction = schematic.Auto(
+            parent=self,
+            name="Reaction",
+        )
         self.sampling = schematic.Auto(
             parent=self, 
             name="Sampling",
-            active_txt="Pause", 
+            active_txt="Wait", 
             inactive_txt="Continue"
         )
         self.load_reactor = schematic.Auto(
             parent=self, 
             name="Load Reactor",
-            active_txt="Pause", 
+            active_txt="Wait", 
             inactive_txt="Continue"
         )
-        self.reaction = schematic.Auto(parent=self, name="Reaction")
         self.worker = schematic.Display(parent=self, name="Worker")
         self.helper = schematic.Display(parent=self, name="Helper")
 
         self.container = QGridLayout(self)
+        self.container.addWidget(self.graphitization, 0, 4)
+        self.container.addWidget(self.auto, 1, 3)
+        self.container.addWidget(self.conditioning, 1, 4)
+        self.container.addWidget(self.load_samples, 2, 4)
+        self.container.addWidget(self.reaction, 3, 4)
+        self.container.addWidget(self.worker, 2, 3)
+        self.container.addWidget(self.helper, 3, 3)
+        self.container.addWidget(self.sampling, 2, 2)
+        self.container.addWidget(self.load_reactor, 3, 2)
+        self.container.addWidget(self.reactors, 3, 1)
         self.container.addWidget(self.reset, 0, 0)
-        self.container.addWidget(self.sampling, 1, 0)
-        self.container.addWidget(self.load_reactor, 2, 0)
-        self.container.addWidget(QWidget(), 0, 1)
-        self.container.addWidget(self.auto, 0, 2)
-        self.container.addWidget(self.conditioning, 1, 2)
-        self.container.addWidget(self.load_samples, 2, 2)
-        self.container.addWidget(self.reaction, 3, 2)
-        self.container.addWidget(self.graphitization, 0, 3)
-        self.container.addWidget(self.worker, 1, 3)
-        self.container.addWidget(self.helper, 2, 3)
-        self.container.addWidget(self.reactors, 3, 0)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -266,7 +308,6 @@ class Control(QWidget):
         else:
             self.stop()
         
-# make button
     def reset(self):
         self.table.reset()
         self.graph.reset()
@@ -276,13 +317,13 @@ class Control(QWidget):
         self.helper.clear()
 
         self.schematic.stop()
-        self.procedures.stop()
 
         self.smc.close_all()
         self.tm.stop([h.id for h in self.schematic.heaters])
         self.peltier.stop()
 
         self.panel.worker.set_running(False)
+        self.panel.helper.set_running(False)
 
         self.panel.graphitization.set_active(False)
         self.panel.graphitization.set_running(False)
@@ -299,6 +340,10 @@ class Control(QWidget):
         self.panel.reaction.set_active(True)
         self.panel.reaction.set_running(False)
         self.panel.reaction.set_text() # move funcs
+
+        self.procedures.running = False
+        self.worker.message.emit("")
+        self.helper.message.emit("")
 
     def prompt(self, message, event=None):
         msg_box = QMessageBox(self)
@@ -335,6 +380,7 @@ class Control(QWidget):
         self.tm_worker.stop()
         self.smc_worker.stop()
         self.peltier_worker.stop()
+
         self.worker.stop()
         self.helper.stop()
 
