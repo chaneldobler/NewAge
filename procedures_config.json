@@ -25,14 +25,24 @@
       "Default": 0.006,
       "Unit": "bar"
     },
+    "H2 Pressure Limit": {
+      "Value": 0.8,
+      "Default": 0.8,
+      "Unit": "bar"
+    },
     "H2 Cycle Repetitions": {
-      "Value": 1,
+      "Value": 2,
       "Default": 3,
       "Unit": ""
     },
     "H2 Cycle Duration": {
       "Value": 300,
       "Default": 300,
+      "Unit": "s"
+    },
+    "Offset Vacuum Duration": {
+      "Value": 20,
+      "Default": 20,
       "Unit": "s"
     }
   },
