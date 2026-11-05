@@ -26,6 +26,9 @@ styleSheet = """
         color: black;
         background-color: white;
     }
+    QLineEdit {
+        border: 1px solid grey;
+    }
     Title {
         color: white;
         background-color: grey;

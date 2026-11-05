@@ -89,4 +89,4 @@ class TcpIp:
 
 if __name__ == "__main__":
     tcpip = TcpIp()
-    print(tcpip.get_status())
+    print(tcpip.sleep())

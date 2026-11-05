@@ -31,7 +31,7 @@
       "Unit": "bar"
     },
     "H2 Cycle Repetitions": {
-      "Value": 2,
+      "Value": 1,
       "Default": 3,
       "Unit": ""
     },
@@ -68,13 +68,13 @@
       "Unit": "\u00b0C"
     },
     "Vacuum Step Duration": {
-      "Value": 0.2,
-      "Default": 0.2,
+      "Value": 0.4,
+      "Default": 0.4,
       "Unit": "s"
     },
     "Line Step Duration": {
-      "Value": 0.2,
-      "Default": 0.2,
+      "Value": 0.8,
+      "Default": 0.8,
       "Unit": "s"
     },
     "CO2 Pressure Scaling": {
@@ -83,8 +83,8 @@
       "Unit": ""
     },
     "H2 Step Duration": {
-      "Value": 0.2,
-      "Default": 0.2,
+      "Value": 0.4,
+      "Default": 0.4,
       "Unit": "s"
     },
     "Load Pressure Limit": {
@@ -100,7 +100,7 @@
       "Unit": "\u00b0C"
     },
     "Reaction Duration": {
-      "Value": 7200,
+      "Value": 720,
       "Default": 7200,
       "Unit": "s"
     },

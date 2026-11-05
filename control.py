@@ -36,7 +36,7 @@ class History(QWidget):
         self.graph.setYRange(0, 2.1)
         legend = self.graph.addLegend(labelTextSize='14pt')
         legend.setLabelTextColor('k')
-
+        legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(10, -10))
         axis_font = QFont()
         axis_font.setPointSize(14)
 
@@ -84,9 +84,11 @@ class History(QWidget):
         self.running = True
 
     def save(self, folder: str):
+        time_snapshot = list(self.time)
+        history_snapshot = [list(h) for h in self.history]
         data = {
-            "time": self.time,
-            "history": self.history
+            "time": time_snapshot,
+            "history": history_snapshot
         }
         with open(os.path.join(folder, self.filename), 'w') as f:
             json.dump(data, f, indent=4)
@@ -274,7 +276,7 @@ class Panel(QWidget):
         self.save = QPushButton("Save")
         self.load = QPushButton("Load")
         self.store = QPushButton("Store")
-        self.reactors = Reactors(self)
+        self.valves = Reactors(self)
         self.auto = schematic.Auto(parent=self, name="Automatic")
         self.conditioning = schematic.Auto(
             parent=self, 
@@ -288,36 +290,24 @@ class Panel(QWidget):
             parent=self,
             name="Reaction",
         )
-        self.sampling = schematic.Auto(
-            parent=self, 
-            name="Sampling",
-            active_txt="Wait", 
-            inactive_txt="Continue"
-        )
-        self.load_reactor = schematic.Auto(
-            parent=self, 
-            name="Load Reactor",
-            active_txt="Wait", 
-            inactive_txt="Continue"
-        )
         self.worker = schematic.Display(parent=self, name="Worker")
         self.helper = schematic.Display(parent=self, name="Helper")
+        self.next = schematic.Display(parent=self, name="Next Reactor")
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.graphitization, 0, 0)
-        self.container.addWidget(self.auto, 1, 1)
-        self.container.addWidget(self.conditioning, 1, 2)
-        self.container.addWidget(self.load_samples, 1, 3)
-        self.container.addWidget(self.reaction, 1, 4)
-        self.container.addWidget(self.worker, 1, 0)
-        self.container.addWidget(self.helper, 2, 0)
-        self.container.addWidget(self.sampling, 2, 3)
-        self.container.addWidget(self.load_reactor, 3, 3)
-        self.container.addWidget(self.reactors, 0, 4)
-        self.container.addWidget(self.reset, 3, 1, Qt.AlignmentFlag.AlignBottom)
-        self.container.addWidget(self.save, 3, 1, Qt.AlignmentFlag.AlignTop)
-        self.container.addWidget(self.store, 2, 1, Qt.AlignmentFlag.AlignBottom)
-        self.container.addWidget(self.load, 3, 1)
+        self.container.addWidget(self.graphitization, 0, 2)
+        self.container.addWidget(self.auto, 0, 0)
+        self.container.addWidget(self.conditioning, 1, 1)
+        self.container.addWidget(self.load_samples, 1, 2)
+        self.container.addWidget(self.reaction, 1, 3)
+        self.container.addWidget(self.worker, 2, 0)
+        self.container.addWidget(self.helper, 3, 0)
+        self.container.addWidget(self.next, 2, 2)
+        self.container.addWidget(self.valves, 3, 4)
+        self.container.addWidget(self.reset, 0, 4, Qt.AlignmentFlag.AlignBottom)
+        self.container.addWidget(self.save, 0, 4, Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.store, 1, 4, Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.load, 0, 4)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -349,8 +339,8 @@ class Control(QWidget):
             self.worker, self.helper, self.table, self.schematic, self.panel
         )
 
-        self.panel.reactors.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
-        self.panel.reactors.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
+        self.panel.valves.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
+        self.panel.valves.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
 
         self.panel.graphitization.button.clicked.connect(lambda: self.start(self.panel.graphitization.active))
 
@@ -475,9 +465,9 @@ class Control(QWidget):
 
     def request(self, valve):
             if valve.active:
-                self.smc_worker.request(self.smc.set, [valve.id], 0)
+                self.smc.set([valve.id], 0)
             else:
-                self.smc_worker.request(self.smc.set, [valve.id], 1)
+                self.smc.set([valve.id], 1)
 
     def closeEvent(self, event):
         self.stop()

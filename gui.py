@@ -11,157 +11,86 @@ import pyqtgraph as pg
 import keller, smc, tm
 import worker
 import procedures, control
+import components
+import schematic
 
 class Configurations(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        with open("procedures_config.json", "r") as f:
+        self.setStyleSheet(components.styleSheet)
+        self.setFixedSize(1950, 550)
+        self.filename = "procedures_config.json"
+
+        with open(self.filename, "r") as f:
             self.config = json.load(f)
 
-        self.grid = QGridLayout()
-        self.grid.setVerticalSpacing(0)
-        self.grid.setRowStretch(100, 1)
-        self.setFixedSize(2600, 800)
-        self.setContentsMargins(20, 20, 20, 20)
-
-        self.inputs = {}
-        for i, (stage, items) in enumerate(self.config.items()):
-            header = QLabel(stage, alignment=Qt.AlignmentFlag.AlignCenter)
-            header.setStyleSheet(f"""
-            QLabel {{
-                background-color: #495057;
-                color: white;
-                border: none;
-                font-weight: bold;
-                border-radius: 0px;
-                font-size: 24px;
-                padding: 12px 16px;
-            }}
-             """)
-            self.grid.addWidget(header, 0, 3*i, 1, 3, alignment=Qt.AlignmentFlag.AlignTop)
-
+        self.data = {}
+        self.container = QGridLayout(self)
+        for i, (title, items) in enumerate(self.config.items()):
+            header = components.Title(title, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.container.addWidget(header, 0, 3 * i, 1, 3)
+            
             for j, (name, properties) in enumerate(items.items()):
-                label = QLabel(name)
-                label.setStyleSheet(f"""
-                QLabel {{
-                    background-color: #6c757d;
-                    color: white;
-                    border: none;
-                    border-radius: 0px;
-                    font-size: 24px;
-                    padding: 16px 24px;
-                }}
-                """)
-
+                item = QLabel(name, alignment=Qt.AlignmentFlag.AlignLeft)
                 value = QLineEdit(str(properties.get("Value", "")), alignment=Qt.AlignmentFlag.AlignRight)
-                value.setStyleSheet("""
-                QLineEdit {
-                    background-color: white;
-                    border: none;
-                    border-radius: 0px;
-                    color: black;
-                    font-size: 24px;
-                    padding: 16px 8px;
-                }
-                """)
+                unit = QLabel(properties.get("Unit", ""), alignment=Qt.AlignmentFlag.AlignLeft)
 
-                unit = QLabel(properties.get("Unit", ""))
-                unit.setStyleSheet(f"""
-                QLabel {{
-                    background-color: #6c757d;
-                    color: white;
-                    border: none;
-                    border-radius: 0px;
-                    font-size: 24px;
-                    padding: 16px 12px;
-                }}
-                """)
-
-                self.inputs[(stage, name)] = value
-                self.grid.addWidget(label, j+1, 3*i)
-                self.grid.addWidget(value, j+1, 3*i+1)
-                self.grid.addWidget(unit, j+1, 3*i+2)
-
-        self.save_btn = QPushButton("Save")
-        self.save_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: #ffffff;
-                border: 1px solid #545b62;
-                border-radius: 0px;
-                font-size: 24px;
-                font-weight: bold;
-                padding: 12px 16px;
-            }
-            QPushButton:hover {
-                background-color: #5c636a;
-            }
-            QPushButton:pressed {
-                background-color: #495057;
-            }
-        """)
-        
-        self.reset_btn = QPushButton("Reset")
-        self.reset_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6c757d;
-                color: #ffffff;
-                border: 1px solid #545b62;
-                border-radius: 0px;
-                font-size: 24px;
-                font-weight: bold;
-                padding: 12px 16px;
-            }
-            QPushButton:hover {
-                background-color: #5c636a;
-            }
-            QPushButton:pressed {
-                background-color: #495057;
-            }
-        """)
-
-        self.save_btn.clicked.connect(self.save)        
-        self.reset_btn.clicked.connect(self.reset)
-
-        self.buttons = QHBoxLayout()
-        self.buttons.addWidget(self.save_btn, alignment=Qt.AlignmentFlag.AlignTop)
-        self.buttons.addWidget(self.reset_btn, alignment=Qt.AlignmentFlag.AlignTop)
-
-        self.container = QHBoxLayout(self)
-        self.container.addLayout(self.grid)
-        self.container.addLayout(self.buttons)
-
+                value.returnPressed.connect(self.save)
+                self.data[(title, name)] = value
+                self.container.addWidget(item, j + 1, 3 * i)
+                self.container.addWidget(value, j + 1, 3 * i + 1)
+                self.container.addWidget(unit, j + 1, 3 * i + 2)
+    
     def save(self):
-        for (category, name), value in self.inputs.items():
-            val = value.text()
+        for (title, name), item in self.data.items():
+            val = item.text()
             val = float(val) if "." in val else int(val)
-            self.config[category][name]["Value"] = val
+            self.config[title][name]["Value"] = val
 
-        with open("procedures_config.json", "w", encoding="utf-8") as f:
+        with open(self.filename, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=2)
 
     def reset(self):
-        for (category, name), value in self.inputs.items():
-            val = self.config[category][name]["Default"]
-            value.setText(str(val))
-            self.config[category][name]["Value"] = val
+        for (title, name), item in self.data.items():
+            val = self.config[title][name]["Default"]
+            item.edit.setText(str(val))
+            self.config[title][name]["Value"] = val
 
-        with open("procedures_config.json", "w", encoding="utf-8") as f:
+        with open(self.filename, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=2)
 
-class UI(QMainWindow):
+class GUI(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("New Age")
+        self.setWindowTitle("NewAGE")
 
         self.tabs = QtWidgets.QTabWidget()
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid grey;  
+                top: -1px;
+                background-color: #f5f5f5;
+            }
+            QTabBar::tab {
+                height: 30px;
+                min-width: 100px;
+                font-size: 20px;
+                background-color: #f5f5f5;
+                border: 1px solid black;
+                padding: 8px 16px;
+            }
+            QTabBar::tab:selected {
+                background-color: #f5f5f5;
+                border-bottom-color: #f5f5f5; 
+            }
+        """)
         self.setCentralWidget(self.tabs)
 
         self.control = control.Control(self)
         self.configurations = Configurations(self)
 
-        self.tabs.addTab(self.control, "Control")
-        self.tabs.addTab(self.configurations, "Configuration")
+        self.tabs.addTab(self.control, "Controls")
+        self.tabs.addTab(self.configurations, "Configurations")
         
     def closeEvent(self, event):
         self.control.closeEvent(event)
@@ -170,7 +99,7 @@ class UI(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    window = UI()
+    window = GUI()
 
-    window.show() #showMaximized()
+    window.show()
     sys.exit(app.exec())

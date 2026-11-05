@@ -1,7 +1,7 @@
 
 import sys
 import json
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QLabel, QGridLayout
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QLabel, QGridLayout, QLineEdit
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtCore import Qt
 import components as c
@@ -123,6 +123,19 @@ class Value:
         text = str(self.get_value())
         self.display.setText(text)
 
+class Field:
+    def __init__(self, unit: str = "", value: float = 0.0, **kwargs):
+        self.value = value
+        super().__init__(**kwargs)
+
+        self.edit = QLineEdit(str(self.value), alignment=Qt.AlignmentFlag.AlignRight)
+        self.edit.setFixedWidth(100)
+        self.unit = QLabel(unit)
+        self.unit.setFixedWidth(60)
+
+        self.container.addWidget(self.edit, 0, 2, 1, 1, Qt.AlignmentFlag.AlignRight)
+        self.container.addWidget(self.unit, 0, 3, 1, 1, Qt.AlignmentFlag.AlignRight)
+
 class Toggle(ActiveRunning):
     def __init__(self, active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
         super().__init__(**kwargs)
@@ -159,7 +172,7 @@ class Oven(ActiveRunning, Value, Symbol):
 
 class Reactor(Toggle, Value, Symbol):
     def __init__(self, name: str = "Reactor", color: str = "grey", id: int = 0, nr: int = 1, unit = "mbar", **kwargs):
-        super().__init__(name = f"{name} {nr}", color = QColor.fromHslF(((id + 4)/12) % 1, 0.95, 0.45).name(), id = id, nr = nr, unit = unit, **kwargs)
+        super().__init__(name = f"{name} {nr}", color = QColor.fromHslF(id / 10, 0.65 + ((id + 7) % 3) / 7, 0.35 + ((id + 5) % 3) / 7).name(), id = id, nr = nr, unit = unit, **kwargs)
         self.offset = 0.0
         self.slope = 1.0
 
@@ -189,6 +202,10 @@ class Display(Running, Symbol):
         self.container.addWidget(self.display, 1, 0, 1, 2)
 
         self.set_running(False)
+
+class Edit(Field, Symbol):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
 class Auto(Toggle, Symbol):
     def __init__(self, color: str = QColor.fromHslF(0.6, 0.9, 0.3).name(), **kwargs):
