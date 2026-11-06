@@ -100,7 +100,7 @@
       "Unit": "\u00b0C"
     },
     "Reaction Duration": {
-      "Value": 720,
+      "Value": 7200,
       "Default": 7200,
       "Unit": "s"
     },

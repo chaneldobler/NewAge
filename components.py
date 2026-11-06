@@ -4,7 +4,7 @@ styleSheet = """
     QWidget {
         margin: 2px;
         padding: 8px;
-        font-size: 20px
+        font-size: 20px;
     }
     QFrame {
         background-color: white;

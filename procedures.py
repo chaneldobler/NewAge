@@ -27,6 +27,7 @@ class Procedures:
         self.table = table
         self.panel = panel
 
+        self.valve_reactors_all = self.schematic.valve_reactors
         self.valve_reactors = self.schematic.valve_reactors
         self.valve_lines = self.schematic.valve_lines
         self.valve_vacuum = [self.schematic.valve_vacuum]
@@ -36,6 +37,7 @@ class Procedures:
         self.valve_lift = [self.schematic.valve_lift]
         self.valve_sampling = [self.schematic.valve_sampling]
 
+        self.reactors_all = self.schematic.reactors
         self.reactors = self.schematic.reactors
 
         self.ovens = self.schematic.ovens
@@ -298,7 +300,7 @@ class Procedures:
             self.set_active()
             if any(r.get_value() < 0.8 for r in self.reactors):
                 wait = threading.Event()
-                self.worker.prompt.emit("Pressure too low.", QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Cancel, wait)
+                self.worker.prompt.emit("Pressure too low.", QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Ignore | QMessageBox.StandardButton.Cancel, wait)
                 wait.wait()
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
@@ -357,8 +359,8 @@ class Procedures:
     def h2_cleaning(self, repetitions, duration, evac_duration, limit):
         self.set_active()
         self.smc.set(self.get_idx(self.valve_reactors), 1)
+        self.worker.message.emit("Cleaning reactors")
         for i in range(repetitions):
-            self.worker.message.emit(f"Cleaning reactors ({i+1}/{repetitions})")
             self.smc.set(self.get_idx(self.valve_h2), 1)
             while all(r.get_value() < limit for r in self.reactors):
                 if not self.running:
@@ -380,27 +382,19 @@ class Procedures:
 
     def correct_offset(self, duration):
         self.set_active()
-        for r in self.reactors:
-            r.reset()
-
-        self.worker.message.emit("Evacuating reactors")
+        self.worker.message.emit("Correcting offset")
         self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 1)
         status = self.wait(duration)
         if status:
             return -1
-        
-        self.worker.message.emit("Measuring offsets")
-        offsets = self.get_average_pressure()
-        if offsets == -1:
-            return -1
 
         with open("settings.json", "r") as f:
-            settings = json.load(f) # put somewhere else?
+            settings = json.load(f)
 
         for i, r in enumerate(self.reactors):
-            if i < len(offsets):
-                r.offset = offsets[i]
-                settings["Reactors"][f"Reactor {r.id}"]["Offset"] = offsets[i]
+            offset = r.value
+            r.offset = offset
+            settings["Reactors"][f"Reactor {r.id}"]["Offset"] = offset
 
         with open("settings.json", "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
@@ -414,10 +408,10 @@ class Procedures:
         if not self.panel.conditioning.active:
             self.panel.worker.set_running(False)
             return
-        self.parent.save(self.timestamp)
         self.panel.worker.set_running(True)
         self.panel.conditioning.set_running(True)
         self.smc.close_all()
+        self.set_active()
         self.smc.set([v.id for v in self.valve_lines], 1)
 
         while not self.panel.auto.active:
@@ -468,15 +462,16 @@ class Procedures:
             if not self.running:
                 return 
             time.sleep(1)
+        self.panel.conditioning.set_running(False)
         self.worker.message.emit("")
         self.smc.close_all()
-        self.panel.conditioning.set_running(False)
         return
 
     # ----- Stage Load Samples -----
     def load_reactor(self, reactor, valve_reactor, vacuum_duration, 
                      release_duration, clean_trap_temp, clean_trap_dur, 
                      temperature, scaling, limit, vac_step, line_step, h2_step):
+        self.set_active()
         if len(self.valve_lines) < 2:
             valve_line = self.valve_lines
         else:
@@ -505,14 +500,13 @@ class Procedures:
         self.smc.set(self.get_idx(self.valve_vacuum), 0)
         time.sleep(0.4)
 
-        self.worker.message.emit("Heating trap")
+        self.worker.message.emit(f"Loading reactor {reactor.id}")
         self.start_heaters([self.trap], temperature)
         while self.trap.get_value() < temperature:
             if not self.running:
                 return -1
             time.sleep(1)
 
-        self.worker.message.emit(f"Loading reactor {reactor.id}")
         status = self.wait(release_duration)
         if status:
             return -1     
@@ -568,10 +562,10 @@ class Procedures:
 
         pressure_H2 = reactor.get_value()
         self.table.set_entry(int(pressure_H2 * 1000), reactor.id - 1, 4)
-
         return 0
 
-    def sampling(self, reactor, index, temperature):
+    def sampling(self, temperature):
+        self.set_active()
         self.worker.message.emit("Waiting for trap")
         while self.trap.get_value() > temperature:
             if not self.running:
@@ -609,14 +603,7 @@ class Procedures:
             status = self.tcpip.get_process_status().split()
 
         self.tcpip.stop_processing()
-
         self.smc.set(self.get_idx(self.valve_sampling), 0)
-
-        n = float(self.tcpip.get_n(index).split()[3])
-        c = float(self.tcpip.get_c(index).split()[3])
-        self.table.set_entry(f"{n:.1f}", reactor.id - 1, 6)
-        self.table.set_entry(f"{c:.1f}", reactor.id - 1, 7)
-        self.table.set_entry(f"{(c/n):.2f}", reactor.id - 1, 8)
         return 0
 
     def load_samples(self, trap_vac_dur, trap_release_dur, trap_heating_temp, 
@@ -626,23 +613,28 @@ class Procedures:
         if not self.panel.load_samples.active:
             self.panel.worker.set_running(False)
             return
+        self.set_active()
         self.panel.worker.set_running(True)
         self.panel.load_samples.set_running(True)
         self.smc.close_all()
 
         i = 0
-        while i < len(self.reactors): 
+        i_complete = []
+        while i < len(self.reactors_all):
+            if not self.reactors_all[i].active or i in i_complete:
+                i += 1
+                continue
+            self.parent.panel.next.combo.setCurrentIndex(i)
+
             while not self.panel.auto.active:
                 self.worker.message.emit("")
                 if not self.running:
                     return 
                 time.sleep(1)
-            self.set_active() # problematic when earlier reactors deactivated
-            self.parent.save(self.timestamp)
-            self.parent.panel.next.display.setText(f"Reactor {self.reactors[i].id}")
             self.worker.message.emit("Waiting for EA")
             status = self.tcpip.get_status() 
             while status != "STS READY":
+                time.sleep(1)
                 status = self.tcpip.get_status() 
                 if not self.running:
                     return
@@ -655,28 +647,50 @@ class Procedures:
                     elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
                         self.parent.stop()
                         return -1
+
+            idx = self.tcpip.get_index().split()
+            while idx[0] != "SINX":
                 time.sleep(1)
+                idx = self.tcpip.get_index().split()
+            index = int(idx[1])
 
-            index = int(self.tcpip.get_index().split()[1])
-            name = self.tcpip.get_name(index).split()[2]
-            weight = float(self.tcpip.get_weight(index).split()[2])
+            name = self.tcpip.get_name(index).split()
+            while name[0] != "NAM":
+                time.sleep(1)
+                name = self.tcpip.get_name(index).split()
+            name = name[2]
 
-            self.trap_cooling = True
-            self.helper.request(self.cool_trap, trap_cooling_temp)
-
-            self.parent.save(self.timestamp)
+            wgh = self.tcpip.get_weight(index).split()
+            while wgh[0] != "WGH":
+                time.sleep(1)
+                wgh = self.tcpip.get_weight(index).split()
+            weight = float(wgh[2])
 
             while not self.panel.auto.active:
                 self.worker.message.emit("")
                 if not self.running:
                     return 
                 time.sleep(1)
-
-            status = self.sampling(self.reactors[i], index, trap_sampling_temp)
+            self.trap_cooling = True
+            self.helper.request(self.cool_trap, trap_cooling_temp)
+            status = self.sampling(trap_sampling_temp)
             if status:
                 self.trap_cooling = False
                 return 
             self.trap_cooling = False
+                
+            self.worker.message.emit("Entering data")
+            pct_n = self.tcpip.get_n(index).split()
+            while pct_n[0] != "PCT" and pct_n[2] != "N":
+                time.sleep(1)
+                pct_n = self.tcpip.get_n(index).split()
+            n = float(pct_n[3])
+
+            pct_c = self.tcpip.get_c(index).split()
+            while pct_c[0] != "PCT" and pct_c[2] != "C":
+                time.sleep(1)
+                pct_c = self.tcpip.get_c(index).split()
+            c = float(pct_c[3])
 
             self.parent.save(self.timestamp)
 
@@ -686,34 +700,33 @@ class Procedures:
 
             if name.lower() == "first":
                 continue
-
-            self.table.set_entry(name.split("-")[0].split("_")[0], self.reactors[i].id - 1, 0)
-            self.table.set_entry(f"{weight:.2f}", self.reactors[i].id - 1, 1)
-
-            self.parent.save(self.timestamp)
             
             while not self.panel.auto.active:
                 self.worker.message.emit("")
                 if not self.running:
                     return 
-                time.sleep(1)
-
+                time.sleep(1)   
+            i = self.parent.panel.next.combo.currentIndex()
+            if i >= len(self.reactors_all):
+                break
+            self.table.set_entry(name.split("-")[0].split("_")[0], i, 0)
+            self.table.set_entry(f"{weight:.2f}", i, 1)
+            self.table.set_entry(f"{n:.1f}", i, 6)
+            self.table.set_entry(f"{c:.1f}", i, 7)
+            self.table.set_entry(f"{(c/n):.2f}", i, 8)
+            self.parent.save(self.timestamp)
             status = self.load_reactor(
-                self.reactors[i], self.valve_reactors[i],
+                self.reactors_all[i], self.valve_reactors_all[i],
                 trap_vac_dur, trap_release_dur, clean_trap_temp,
                 clean_trap_dur, trap_heating_temp, co2_press_scaling,
                 load_press_limit, vac_step, line_step, h2_step
             )
             if status:
                 return 
-
-            self.parent.panel.next.display.setText("")
-            i += 1
-
-        self.parent.save(self.timestamp)
+            self.parent.save(self.timestamp)
+            i_complete.append(i)
 
         self.helper.request(self.ea_sleep)
-
         while not self.panel.auto.active:
             self.worker.message.emit("")
             if not self.running:
@@ -727,7 +740,7 @@ class Procedures:
     def remove_water(self, duration): 
         self.set_peltiers(0)
         self.smc.set(self.get_idx(self.valve_vacuum), 1)
-        time.sleep(0.2)
+        time.sleep(0.4)
         self.smc.set(self.get_idx(self.valve_reactors), 1)
         status = self.wait(duration)
         if status:
@@ -745,17 +758,24 @@ class Procedures:
         self.smc.set(self.get_idx(self.valve_lift + self.valve_lines), 1)
         self.set_peltiers(1)
 
-        self.parent.save(self.timestamp)
-
+        while not self.panel.auto.active:
+            self.worker.message.emit("")
+            if not self.running:
+                return 
+            time.sleep(1)
         self.worker.message.emit("Heating ovens")
         self.start_heaters(self.ovens, reaction_temp)
         while any(o.get_value() < reaction_temp for o in self.ovens):
             if not self.running:
                 return 
             time.sleep(1)
-
         self.parent.save(self.timestamp)
 
+        while not self.panel.auto.active:
+            self.worker.message.emit("")
+            if not self.running:
+                return 
+            time.sleep(1)
         self.worker.message.emit("Starting reaction")    
         end_time = time.time() + reaction_dur
         while time.time() < end_time:
@@ -763,10 +783,8 @@ class Procedures:
                 return
             self.worker.message.emit(f"Reaction ({int(end_time - time.time())//60 + 1} min)")
             time.sleep(1)
-
         self.smc.set(self.get_idx(self.valve_lift), 0)
         self.stop_heaters(self.ovens)
-
         self.parent.save(self.timestamp)
 
         self.worker.message.emit("Resting reactors")    
@@ -779,7 +797,6 @@ class Procedures:
             self.table.set_entry(int(pressure_end * 1000), r.id - 1, 5)
             self.table.set_entry(int(reaction_dur / 60), r.id - 1, 9)
             self.table.set_entry(self.timestamp, r.id - 1, 10)
-
         self.parent.save(self.timestamp)
         self.table.store()
 
@@ -793,18 +810,13 @@ class Procedures:
                 return -1
             time.sleep(1)
 
-        self.parent.save(self.timestamp)
-
         self.worker.message.emit("Removing water")
         status = self.remove_water(water_removal_dur)
         if status:
             return
-
         self.parent.save(self.timestamp)
 
-
         self.smc.close_all()
-
         self.panel.reaction.set_running(False)
         self.parent.stop()
         return 

@@ -89,4 +89,6 @@ class TcpIp:
 
 if __name__ == "__main__":
     tcpip = TcpIp()
-    print(tcpip.sleep())
+    print(tcpip.get_index())
+    print(tcpip.get_n(25))
+    print(tcpip.get_c(25))

@@ -2,7 +2,7 @@ import sys
 import json
 import time
 import os
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QAbstractItemView, QFileDialog, QGridLayout, QTableView, QHeaderView, QMessageBox
+from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QComboBox, QFileDialog, QGridLayout, QTableView, QHeaderView, QMessageBox
 from PySide6.QtGui import QStandardItem, QStandardItemModel, QFont
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
@@ -48,7 +48,7 @@ class History(QWidget):
 
         self.curves = []
         for p in self.pressures:
-            pen = pg.mkPen(color=p.color, width=4)
+            pen = pg.mkPen(color=p.color, width=5)
             curve = self.graph.plot(pen=pen, name=f"R{p.id}")
             self.curves.append(curve)
 
@@ -90,7 +90,8 @@ class History(QWidget):
             "time": time_snapshot,
             "history": history_snapshot
         }
-        with open(os.path.join(folder, self.filename), 'w') as f:
+        filepath = os.path.join(folder, self.filename)
+        with open(filepath, 'w') as f:
             json.dump(data, f, indent=4)
 
     def load(self, folder: str):
@@ -257,6 +258,42 @@ class Reactors(QFrame):
         self.container.addWidget(self.btn_open, 1, 0)
         self.container.addWidget(self.btn_close, 1, 1)
 
+class Next(QFrame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+
+        self.title = c.Title("Next Reactor", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.combo = QComboBox()
+        self.combo.setStyleSheet("""
+        QComboBox {
+            color: black;
+            background-color: white;
+            border: 1px solid grey;
+        }
+        QComboBox:hover {
+            border: 1px solid black;
+        }
+        QComboBox::drop-down {
+            border: none;
+            background: transparent;
+        }
+        QComboBox QAbstractItemView {
+            border: none;
+            background-color: white;
+            selection-background-color: grey;
+            selection-color: white;
+        }""")
+        self.combo.addItems([
+            "Reactor 1", "Reactor 2", "Reactor 3", "Reactor 4", "Reactor 5",
+            "Reactor 6", "Reactor 7", "Reactor 8", "Reactor 9", "Reactor 10", ""
+        ])
+        self.combo.setCurrentIndex(10)
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0)
+        self.container.addWidget(self.combo, 1, 0)
+
 class Panel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
@@ -292,7 +329,7 @@ class Panel(QWidget):
         )
         self.worker = schematic.Display(parent=self, name="Worker")
         self.helper = schematic.Display(parent=self, name="Helper")
-        self.next = schematic.Display(parent=self, name="Next Reactor")
+        self.next = Next(self)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.graphitization, 0, 2)
@@ -440,6 +477,8 @@ class Control(QWidget):
         self.procedures.running = False
         self.worker.message.emit("")
         self.helper.message.emit("")
+
+        self.panel.next.combo.setCurrentIndex(10)
 
     def prompt(self, message, buttons=QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Cancel, event=None):
         msg_box = QMessageBox(self)
