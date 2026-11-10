@@ -14,7 +14,7 @@ class Valve(QWidget):
         self.active = False
 
         self.button = QPushButton(f"{self.id}")
-        self.button.setFixedSize(50, 50)
+        self.button.setFixedSize(40, 40)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.button, 0, 0)
@@ -33,7 +33,7 @@ class Valve(QWidget):
         QPushButton {{
             color: {color};
             background-color: {bg_color};
-            border-radius: 23px;
+            border-radius: 19px;
             border: 1px solid grey;
         }}
         QPushButton:hover {{
@@ -45,6 +45,20 @@ class Valve(QWidget):
             background-color: grey;
         }}
         """)
+
+class OpenClose(QFrame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+
+        self.title = c.Title("Reactor Valves", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.btn_open = QPushButton("Open")
+        self.btn_close = QPushButton("Close")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0, 1, 2)
+        self.container.addWidget(self.btn_open, 1, 0)
+        self.container.addWidget(self.btn_close, 1, 1)
 
 class Symbol(QFrame):
     def __init__(self, parent = None, name: str = "", color: str = "grey", id: int = 0, nr: int = 1, **kwargs):
@@ -109,7 +123,7 @@ class Value:
         super().__init__(**kwargs)
 
         self.display = c.Body("", alignment=Qt.AlignmentFlag.AlignRight)
-        self.display.setFixedWidth(90)
+        self.display.setFixedWidth(60)
         self.unit = QLabel(unit)
 
         self.container.addWidget(self.display, 1, 0, 1, 1)
@@ -131,14 +145,15 @@ class Field:
         self.edit = QLineEdit(str(self.value), alignment=Qt.AlignmentFlag.AlignRight)
         self.edit.setFixedWidth(100)
         self.unit = QLabel(unit)
-        self.unit.setFixedWidth(60)
+        self.unit.setFixedWidth(50)
 
         self.container.addWidget(self.edit, 0, 2, 1, 1, Qt.AlignmentFlag.AlignRight)
         self.container.addWidget(self.unit, 0, 3, 1, 1, Qt.AlignmentFlag.AlignRight)
 
 class Toggle(ActiveRunning):
-    def __init__(self, active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
+    def __init__(self, running_txt: str = "Stop", active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
         super().__init__(**kwargs)
+        self.running_txt = running_txt
         self.active_txt = active_txt
         self.inactive_txt = inactive_txt
 
@@ -148,10 +163,12 @@ class Toggle(ActiveRunning):
         self.container.addWidget(self.button, 2, 0, 1, 2)
 
     def set_text(self):
-        if self.active:
+        if not self.active:
+            self.button.setText(self.inactive_txt)
+        elif not self.running:
             self.button.setText(self.active_txt)
         else: 
-            self.button.setText(self.inactive_txt)
+            self.button.setText(self.running_txt)
         self.set_color()
 
     def toggle(self):
@@ -215,7 +232,7 @@ class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1400, 1100)
+        self.setFixedSize(1000, 1000)
         self.setStyleSheet(c.styleSheet)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)
@@ -248,6 +265,13 @@ class Schematic(QWidget):
         self.h2 = Symbol(parent=self, name="H2")
         self.vacuum = Symbol(parent=self, name="Vac")
         self.ea = Symbol(parent=self, name="EA")
+
+        self.btn = OpenClose(self)
+        self.clean_trap = Auto(parent=self, name="Clean Trap", active_txt="Start")
+        self.clean_trap.button.clicked.disconnect()
+
+        self.worker = Display(parent=self, name="Worker")
+        self.helper = Display(parent=self, name="Helper")
 
         with open("settings.json", "r") as f:
             settings = json.load(f)
@@ -285,6 +309,12 @@ class Schematic(QWidget):
         self.grid.addWidget(self.h2, 4, 6, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.vacuum, 6, 6, alignment=Qt.AlignmentFlag.AlignCenter)
         self.grid.addWidget(self.ea, 6, 2, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.grid.addWidget(self.btn, 7, 2, 1, 3)
+        self.grid.addWidget(self.clean_trap, 9, 2, 1, 3)
+
+        self.grid.addWidget(self.worker, 1, 2, 1, 3)
+        self.grid.addWidget(self.helper, 3, 2, 1, 3)
 
     def get_reactor_idx(self):
         return [r.id for r in self.reactors]

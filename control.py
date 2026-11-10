@@ -17,7 +17,7 @@ class History(QWidget):
     def __init__(self, parent, pressures):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(2100, 1100)
+        self.setFixedSize(1450, 1000)
         self.pressures = pressures
         self.history = [[] for _ in self.pressures]
         self.filename = "history.json"
@@ -29,16 +29,17 @@ class History(QWidget):
         self.time = []
 
         self.graph = pg.PlotWidget()
-        self.graph.setLabel('left', 'Pressure', units='bar', **{'color': 'black', 'font-size': '16pt'})
-        self.graph.setLabel('bottom', 'Time', units='min', **{'color': 'black', 'font-size': '16pt'}) 
+        self.graph.setLabel('left', 'Pressure', units='bar', **{'color': 'black', 'font-size': '14pt'})
+        self.graph.setLabel('bottom', 'Time', units='min', **{'color': 'black', 'font-size': '14pt'}) 
         self.graph.setBackground('w')
         self.graph.getViewBox().setLimits(xMin=0)
+        self.graph.enableAutoRange(axis='x')
         self.graph.setYRange(0, 2.1)
-        legend = self.graph.addLegend(labelTextSize='14pt')
+        legend = self.graph.addLegend(labelTextSize='12pt')
         legend.setLabelTextColor('k')
         legend.anchor(itemPos=(0, 1), parentPos=(0, 1), offset=(10, -10))
         axis_font = QFont()
-        axis_font.setPointSize(14)
+        axis_font.setPointSize(12)
 
         for axis_name in ['left', 'bottom']:
             axis = self.graph.getAxis(axis_name)
@@ -75,12 +76,14 @@ class History(QWidget):
             if i < len(self.history):
                 curve.setData(self.time, self.history[i])
 
+    def default(self):
+        self.graph.enableAutoRange(axis='x')
+        self.graph.setYRange(0, 2.1)
+
     def reset(self):
         self.history = [[] for _ in self.pressures]
         self.time = []
-
-        self.graph.setYRange(0, 2.1)
-
+        self.default()
         self.running = True
 
     def save(self, folder: str):
@@ -113,7 +116,7 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(2100, 600)
+        self.setFixedSize(1700, 400)
         self.filename = "table.json"
 
         self.db = db.Database()
@@ -139,23 +142,23 @@ class Table(QWidget):
             QTableView, QHeaderView, QHeaderView::section, QTableCornerButton::section {
                 background-color: white;
                 color: black;
-                font-size: 20px;
+                font-size: 16px;
                 border: none;
             }
             QTableView {
                 gridline-color: grey;
             }
             QTableView::item {
-                padding-top: 8px;
-                padding-bottom: 8px;
-                padding-left: 8px;
-                padding-right: 8px;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                padding-left: 4px;
+                padding-right: 4px;
             }
             QHeaderView::section, QTableCornerButton::section {
-                padding-top: 16px;
-                padding-bottom: 16px;
-                padding-left: 8px;
-                padding-right: 8px;
+                padding-top: 6px;
+                padding-bottom: 6px;
+                padding-left: 4px;
+                padding-right: 4px;
                 border-right: 1px solid grey;
                 border-bottom: 1px solid grey;
             }
@@ -244,20 +247,6 @@ class Table(QWidget):
                     break
                 self.set_entry(val, r, c)
 
-class Reactors(QFrame):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-
-        self.title = c.Title("Reactor Valves", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.btn_open = QPushButton("Open")
-        self.btn_close = QPushButton("Close")
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0, 1, 2)
-        self.container.addWidget(self.btn_open, 1, 0)
-        self.container.addWidget(self.btn_close, 1, 1)
-
 class Next(QFrame):
     def __init__(self, parent):
         super().__init__(parent)
@@ -268,7 +257,7 @@ class Next(QFrame):
         self.combo.setStyleSheet("""
         QComboBox {
             color: black;
-            background-color: white;
+            background-color: #eeeeee;
             border: 1px solid grey;
         }
         QComboBox:hover {
@@ -298,23 +287,19 @@ class Panel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1400, 600)
+        self.setFixedSize(250, 500)
         self.setStyleSheet(c.styleSheet)
 
-        self.graphitization = schematic.Auto(
+        self.auto = schematic.Auto(
             parent=self, 
-            name="Graphitization", 
-            active_txt="Abort", 
-            inactive_txt="Start", 
+            name="Automatic",
+            running_txt="Pause",
+            active_txt="Continue", 
+            inactive_txt="Start"
         )
-        self.graphitization.set_active(False)
-        self.graphitization.set_text()
-        self.reset = QPushButton("Reset")
-        self.save = QPushButton("Save")
-        self.load = QPushButton("Load")
-        self.store = QPushButton("Store")
-        self.valves = Reactors(self)
-        self.auto = schematic.Auto(parent=self, name="Automatic")
+        self.auto.button.clicked.disconnect()
+        self.auto.set_active(False)
+        self.auto.set_text()
         self.conditioning = schematic.Auto(
             parent=self, 
             name="Conditioning",
@@ -327,24 +312,36 @@ class Panel(QWidget):
             parent=self,
             name="Reaction",
         )
-        self.worker = schematic.Display(parent=self, name="Worker")
-        self.helper = schematic.Display(parent=self, name="Helper")
         self.next = Next(self)
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.graphitization, 0, 2)
         self.container.addWidget(self.auto, 0, 0)
-        self.container.addWidget(self.conditioning, 1, 1)
-        self.container.addWidget(self.load_samples, 1, 2)
-        self.container.addWidget(self.reaction, 1, 3)
-        self.container.addWidget(self.worker, 2, 0)
-        self.container.addWidget(self.helper, 3, 0)
-        self.container.addWidget(self.next, 2, 2)
-        self.container.addWidget(self.valves, 3, 4)
-        self.container.addWidget(self.reset, 0, 4, Qt.AlignmentFlag.AlignBottom)
-        self.container.addWidget(self.save, 0, 4, Qt.AlignmentFlag.AlignTop)
-        self.container.addWidget(self.store, 1, 4, Qt.AlignmentFlag.AlignTop)
-        self.container.addWidget(self.load, 0, 4)
+        self.container.addWidget(self.conditioning, 1, 0)
+        self.container.addWidget(self.load_samples, 2, 0)
+        self.container.addWidget(self.reaction, 3, 0)
+        self.container.addWidget(self.next, 4, 0)
+
+class Storage(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setFixedSize(250, 400)
+        self.setStyleSheet(c.styleSheet)
+
+        self.reset = c.Button(parent=self, name="Reset")
+        self.save = c.Button(parent=self, name="Save")
+        self.load = c.Button(parent=self, name="Load")
+        self.store = c.Button(parent=self, name="Store")
+        self.abort = c.Button(parent=self, name="Abort")
+        self.default = c.Button(parent=self, name="Default")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.reset, 2, 0)
+        self.container.addWidget(self.save, 0, 0)
+        self.container.addWidget(self.store, 3, 0)
+        self.container.addWidget(self.load, 1, 0)
+        self.container.addWidget(self.abort, 4, 0)
+        self.container.addWidget(self.default, 5, 0)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -362,12 +359,13 @@ class Control(QWidget):
         self.schematic = schematic.Schematic(self)
         self.graph = History(self, self.schematic.reactors)
         self.table = Table(self)
+        self.storage = Storage(self)
         self.panel = Panel(self)
 
         self.worker = worker.Worker()
         self.helper = worker.Worker()
-        self.smc_worker = worker.Worker(0.1, self.smc.get)
-        self.keller_worker = worker.Worker(0.1, self.keller.get, self.schematic.get_reactor_idx())
+        self.smc_worker = worker.Worker(0.2, self.smc.get)
+        self.keller_worker = worker.Worker(0.5, self.keller.get, self.schematic.get_reactor_idx())
         self.tm_worker = worker.Worker(1.0, self.tm.get, self.schematic.get_heater_idx())
         self.peltier_worker = worker.Worker(1.0)
 
@@ -376,21 +374,24 @@ class Control(QWidget):
             self.worker, self.helper, self.table, self.schematic, self.panel
         )
 
-        self.panel.valves.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
-        self.panel.valves.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
+        self.schematic.btn.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
+        self.schematic.btn.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
+        self.schematic.clean_trap.button.clicked.connect(lambda: self.helper.request(self.procedures.clean_trap))
 
-        self.panel.graphitization.button.clicked.connect(lambda: self.start(self.panel.graphitization.active))
+        self.panel.auto.button.clicked.connect(self.start)
 
-        self.panel.reset.clicked.connect(self.reset)
-        self.panel.save.clicked.connect(self.save)
-        self.panel.load.clicked.connect(self.load)
-        self.panel.store.clicked.connect(self.table.store)
+        self.storage.reset.button.clicked.connect(self.reset)
+        self.storage.save.button.clicked.connect(self.save)
+        self.storage.load.button.clicked.connect(self.load)
+        self.storage.store.button.clicked.connect(self.table.store)
+        self.storage.abort.button.clicked.connect(self.stop)
+        self.storage.default.button.clicked.connect(self.graph.default)
 
         for v in self.schematic.valves:
             v.button.clicked.connect(self.request_wrapper(v))
 
-        self.worker.message.connect(self.panel.worker.display.setText)
-        self.helper.message.connect(self.panel.helper.display.setText)
+        self.worker.message.connect(self.schematic.worker.display.setText)
+        self.helper.message.connect(self.schematic.helper.display.setText)
         self.worker.prompt.connect(self.prompt)
         self.helper.prompt.connect(self.prompt)
         self.smc_worker.update.connect(self.schematic.set_valves_active)
@@ -407,17 +408,24 @@ class Control(QWidget):
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.schematic, 0, 0)
-        self.container.addWidget(self.graph, 0, 1)
-        self.container.addWidget(self.panel, 1, 0)
-        self.container.addWidget(self.table, 1, 1)
+        self.container.addWidget(self.graph, 0, 2)
+        self.container.addWidget(self.storage, 0, 1, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
+        self.container.addWidget(self.panel, 0, 1, alignment=Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.table, 1, 1, 1, 2)
 
-    def start(self, active: bool):
-        if active:
+    def start(self):
+        if not self.panel.auto.active:
             self.graph.running = True
-            self.panel.graphitization.set_running(True)
+            self.panel.auto.set_active(True)
+            self.panel.auto.set_running(True)
+            self.panel.auto.set_text()
             self.procedures.start()
-        else:
-            self.stop()
+        elif not self.panel.auto.running:
+            self.panel.auto.set_running(True)
+            self.panel.auto.set_text()
+        else: 
+            self.panel.auto.set_running(False)
+            self.panel.auto.set_text()
         
     def reset(self):
         self.table.reset()
@@ -451,14 +459,10 @@ class Control(QWidget):
         self.tm.stop([h.id for h in self.schematic.heaters])
         self.peltier.stop()
 
-        self.panel.worker.set_running(False)
-        self.panel.helper.set_running(False)
+        self.schematic.worker.set_running(False)
+        self.schematic.helper.set_running(False)
 
-        self.panel.graphitization.set_active(False)
-        self.panel.graphitization.set_running(False)
-        self.panel.graphitization.set_text()
-
-        self.panel.auto.set_active(True)
+        self.panel.auto.set_active(False)
         self.panel.auto.set_running(False)
         self.panel.auto.set_text()
 

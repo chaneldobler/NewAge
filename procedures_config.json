@@ -58,7 +58,7 @@
       "Unit": "s"
     },
     "Trap Release Duration": {
-      "Value": 10,
+      "Value": 20,
       "Default": 10,
       "Unit": "s"
     },
@@ -104,7 +104,7 @@
       "Default": 7200,
       "Unit": "s"
     },
-    "End Pressure Limit": {
+    "End Pressure Tolerance": {
       "Value": 0.05,
       "Default": 0.05,
       "Unit": "bar"

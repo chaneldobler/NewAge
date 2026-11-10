@@ -1,17 +1,17 @@
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QLabel, QFrame, QPushButton, QGridLayout
 
 styleSheet = """
     QWidget {
-        margin: 2px;
-        padding: 8px;
-        font-size: 20px;
+        margin: 1px;
+        padding: 4px;
+        font-size: 16px;
     }
     QFrame {
         background-color: white;
     }
     QPushButton {
         color: black;
-        background-color: white;
+        background-color: #eeeeee;
         border: 1px solid grey;
     }
     QPushButton:hover {
@@ -28,11 +28,12 @@ styleSheet = """
     }
     QLineEdit {
         border: 1px solid grey;
+        background-color: #eeeeee;
     }
     Title {
         color: white;
         background-color: grey;
-        font-size: 22px;
+        font-size: 18px;
         font-weight: bold;
     }
     Body {
@@ -45,3 +46,14 @@ class Title(QLabel):
 
 class Body(QLabel):
     pass
+
+class Button(QFrame):
+    def __init__(self, parent=None, name="Button"):
+        super().__init__(parent)
+        self.parent = parent
+        self.name = name
+
+        self.button = QPushButton(self.name)
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.button, 0, 0)
