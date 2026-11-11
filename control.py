@@ -17,11 +17,11 @@ class History(QWidget):
     def __init__(self, parent, pressures):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1450, 1000)
+        self.setFixedSize(1400, 1100)
         self.pressures = pressures
         self.history = [[] for _ in self.pressures]
         self.filename = "history.json"
-        self.running = True
+        self.running = False
 
         self.start = 0
         self.end = 0
@@ -76,15 +76,19 @@ class History(QWidget):
             if i < len(self.history):
                 curve.setData(self.time, self.history[i])
 
+    def set_running(self, running: bool):
+        self.running = running
+        self.start = time.time()
+
     def default(self):
         self.graph.enableAutoRange(axis='x')
         self.graph.setYRange(0, 2.1)
 
     def reset(self):
+        self.running = False
         self.history = [[] for _ in self.pressures]
         self.time = []
         self.default()
-        self.running = True
 
     def save(self, folder: str):
         time_snapshot = list(self.time)
@@ -116,14 +120,14 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1700, 400)
+        self.setFixedSize(1300, 400)
         self.filename = "table.json"
 
         self.db = db.Database()
 
-        self.headers = ["Sample Name", "Weight [mg]",
-                         "CO2 [\u03bcg]", "CO2 fin [\u03bcg]", "CO2+H2 [mbar]", "p end [mbar]", 
-                         "N [%]", "C [%]", "C / N", "Reaction [min]", "Date [Y-M-D]"]
+        self.headers = ["Sample \n Name", "Weight \n [mg]",
+                         "CO2 \n [\u03bcg]", "CO2 fin \n [\u03bcg]", "CO2+H2 \n [mbar]", "p end \n [mbar]", 
+                         "N [%]", "C [%]", "C / N", "Reaction \n [min]", "Date \n [Y-M-D]"]
         self.reactors = [f"Reactor {i+1}" for i in range(10)]
 
         self.model = QStandardItemModel(len(self.reactors), len(self.headers))
@@ -155,8 +159,8 @@ class Table(QWidget):
                 padding-right: 4px;
             }
             QHeaderView::section, QTableCornerButton::section {
-                padding-top: 6px;
-                padding-bottom: 6px;
+                padding-top: 4px;
+                padding-bottom: 4px;
                 padding-left: 4px;
                 padding-right: 4px;
                 border-right: 1px solid grey;
@@ -287,7 +291,7 @@ class Panel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(250, 500)
+        self.setFixedSize(1200, 400)
         self.setStyleSheet(c.styleSheet)
 
         self.auto = schematic.Auto(
@@ -313,35 +317,52 @@ class Panel(QWidget):
             name="Reaction",
         )
         self.next = Next(self)
+        self.abort = c.Button(parent=self, name="Abort")
+        self.storage = Storage(self)
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.auto, 0, 0)
-        self.container.addWidget(self.conditioning, 1, 0)
-        self.container.addWidget(self.load_samples, 2, 0)
-        self.container.addWidget(self.reaction, 3, 0)
-        self.container.addWidget(self.next, 4, 0)
+        self.container.addWidget(self.conditioning, 0, 1)
+        self.container.addWidget(self.load_samples, 0, 2)
+        self.container.addWidget(self.reaction, 0, 3)
+        self.container.addWidget(self.next, 0, 4)
+        self.container.addWidget(self.abort, 1, 0, alignment=Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.storage, 2, 0)
 
-class Storage(QWidget):
+class Storage(QFrame):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(250, 400)
         self.setStyleSheet(c.styleSheet)
 
-        self.reset = c.Button(parent=self, name="Reset")
-        self.save = c.Button(parent=self, name="Save")
-        self.load = c.Button(parent=self, name="Load")
-        self.store = c.Button(parent=self, name="Store")
-        self.abort = c.Button(parent=self, name="Abort")
-        self.default = c.Button(parent=self, name="Default")
+        self.title = c.Title("Logging", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.reset = QPushButton("Reset")
+        self.save = QPushButton("Save")
+        self.load = QPushButton("Load")
+        self.store = QPushButton("Store DB")
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.reset, 2, 0)
-        self.container.addWidget(self.save, 0, 0)
-        self.container.addWidget(self.store, 3, 0)
-        self.container.addWidget(self.load, 1, 0)
-        self.container.addWidget(self.abort, 4, 0)
-        self.container.addWidget(self.default, 5, 0)
+        self.container.addWidget(self.title, 0, 0)
+        self.container.addWidget(self.reset, 1, 0)
+        self.container.addWidget(self.save, 3, 0)
+        self.container.addWidget(self.store, 4, 0)
+        self.container.addWidget(self.load, 2, 0)
+
+class GraphControls(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setFixedSize(210, 340)
+        self.setStyleSheet(c.styleSheet)
+
+        self.start = QPushButton("Start")
+        self.pause = QPushButton("Pause")
+        self.default = QPushButton("D")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.start, 0, 0)
+        self.container.addWidget(self.default, 0, 2)
+        self.container.addWidget(self.pause, 0, 1)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -359,8 +380,8 @@ class Control(QWidget):
         self.schematic = schematic.Schematic(self)
         self.graph = History(self, self.schematic.reactors)
         self.table = Table(self)
-        self.storage = Storage(self)
         self.panel = Panel(self)
+        self.graph_ctrl = GraphControls(self)
 
         self.worker = worker.Worker()
         self.helper = worker.Worker()
@@ -377,15 +398,21 @@ class Control(QWidget):
         self.schematic.btn.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
         self.schematic.btn.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
         self.schematic.clean_trap.button.clicked.connect(lambda: self.helper.request(self.procedures.clean_trap))
+        self.schematic.offset.button.clicked.connect(lambda: self.worker.request(self.procedures.correct_offset))
+        self.schematic.lift.btn_open.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], 1))
+        self.schematic.lift.btn_close.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], 0))
 
         self.panel.auto.button.clicked.connect(self.start)
+        self.panel.abort.button.clicked.connect(self.stop)
 
-        self.storage.reset.button.clicked.connect(self.reset)
-        self.storage.save.button.clicked.connect(self.save)
-        self.storage.load.button.clicked.connect(self.load)
-        self.storage.store.button.clicked.connect(self.table.store)
-        self.storage.abort.button.clicked.connect(self.stop)
-        self.storage.default.button.clicked.connect(self.graph.default)
+        self.panel.storage.reset.clicked.connect(self.reset)
+        self.panel.storage.save.clicked.connect(lambda: self.save(time.time()))
+        self.panel.storage.load.clicked.connect(self.load)
+        self.panel.storage.store.clicked.connect(self.table.store)
+
+        self.graph_ctrl.default.clicked.connect(self.graph.default)
+        self.graph_ctrl.start.clicked.connect(lambda: self.graph.set_running(True))
+        self.graph_ctrl.pause.clicked.connect(lambda: self.graph.set_running(False))
 
         for v in self.schematic.valves:
             v.button.clicked.connect(self.request_wrapper(v))
@@ -408,10 +435,10 @@ class Control(QWidget):
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.schematic, 0, 0)
-        self.container.addWidget(self.graph, 0, 2)
-        self.container.addWidget(self.storage, 0, 1, alignment=Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignCenter)
-        self.container.addWidget(self.panel, 0, 1, alignment=Qt.AlignmentFlag.AlignTop)
-        self.container.addWidget(self.table, 1, 1, 1, 2)
+        self.container.addWidget(self.graph, 0, 1)
+        self.container.addWidget(self.panel, 1, 1)
+        self.container.addWidget(self.table, 1, 0)
+        self.container.addWidget(self.graph_ctrl, 0, 1, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
 
     def start(self):
         if not self.panel.auto.active:
@@ -459,9 +486,6 @@ class Control(QWidget):
         self.tm.stop([h.id for h in self.schematic.heaters])
         self.peltier.stop()
 
-        self.schematic.worker.set_running(False)
-        self.schematic.helper.set_running(False)
-
         self.panel.auto.set_active(False)
         self.panel.auto.set_running(False)
         self.panel.auto.set_text()
@@ -481,6 +505,9 @@ class Control(QWidget):
         self.procedures.running = False
         self.worker.message.emit("")
         self.helper.message.emit("")
+
+        self.schematic.worker.set_running(False)
+        self.schematic.helper.set_running(False)
 
         self.panel.next.combo.setCurrentIndex(10)
 

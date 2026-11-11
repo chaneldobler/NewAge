@@ -1,12 +1,12 @@
 {
   "Conditioning": {
     "Conditioning Oven Temperature": {
-      "Value": 500,
+      "Value": 150,
       "Default": 500,
       "Unit": "\u00b0C"
     },
     "Preheating Iron Duration": {
-      "Value": 300,
+      "Value": 30,
       "Default": 300,
       "Unit": "s"
     },
@@ -16,27 +16,12 @@
       "Unit": "s"
     },
     "Leak Test Duration": {
-      "Value": 300,
+      "Value": 30,
       "Default": 300,
       "Unit": "s"
     },
-    "Leak Pressure Limit": {
-      "Value": 0.006,
-      "Default": 0.006,
-      "Unit": "bar"
-    },
-    "H2 Pressure Limit": {
-      "Value": 0.8,
-      "Default": 0.8,
-      "Unit": "bar"
-    },
-    "H2 Cycle Repetitions": {
-      "Value": 1,
-      "Default": 3,
-      "Unit": ""
-    },
     "H2 Cycle Duration": {
-      "Value": 300,
+      "Value": 100,
       "Default": 300,
       "Unit": "s"
     },
@@ -44,12 +29,32 @@
       "Value": 20,
       "Default": 20,
       "Unit": "s"
+    },
+    "Leak Pressure Limit": {
+      "Value": 6,
+      "Default": 6,
+      "Unit": "mbar"
+    },
+    "H2 Pressure Limit": {
+      "Value": 800,
+      "Default": 800,
+      "Unit": "mbar"
+    },
+    "H2 Cycle Repetitions": {
+      "Value": 1,
+      "Default": 3,
+      "Unit": "x"
     }
   },
   "Load Samples": {
     "Trap Sampling Temperature": {
       "Value": 50,
       "Default": 50,
+      "Unit": "\u00b0C"
+    },
+    "Trap Heating Temperature": {
+      "Value": 420,
+      "Default": 420,
       "Unit": "\u00b0C"
     },
     "Trap Vacuum Duration": {
@@ -62,35 +67,30 @@
       "Default": 10,
       "Unit": "s"
     },
-    "Trap Heating Temperature": {
-      "Value": 420,
-      "Default": 420,
-      "Unit": "\u00b0C"
-    },
     "Vacuum Step Duration": {
-      "Value": 0.4,
-      "Default": 0.4,
-      "Unit": "s"
-    },
-    "Line Step Duration": {
       "Value": 0.8,
       "Default": 0.8,
       "Unit": "s"
     },
-    "CO2 Pressure Scaling": {
-      "Value": 2.3,
-      "Default": 2.3,
-      "Unit": ""
-    },
-    "H2 Step Duration": {
+    "Line Step Duration": {
       "Value": 0.4,
       "Default": 0.4,
       "Unit": "s"
     },
+    "H2 Step Duration": {
+      "Value": 0.8,
+      "Default": 0.8,
+      "Unit": "s"
+    },
     "Load Pressure Limit": {
-      "Value": 0.57,
-      "Default": 0.57,
-      "Unit": "bar"
+      "Value": 570,
+      "Default": 570,
+      "Unit": "mbar"
+    },
+    "CO2 Pressure Scaling": {
+      "Value": 2.3,
+      "Default": 2.3,
+      "Unit": "x H2"
     }
   },
   "Reaction": {
@@ -100,14 +100,9 @@
       "Unit": "\u00b0C"
     },
     "Reaction Duration": {
-      "Value": 7200,
-      "Default": 7200,
-      "Unit": "s"
-    },
-    "End Pressure Tolerance": {
-      "Value": 0.05,
-      "Default": 0.05,
-      "Unit": "bar"
+      "Value": 120,
+      "Default": 120,
+      "Unit": "min"
     },
     "Cooling Duration": {
       "Value": 180,
@@ -118,6 +113,11 @@
       "Value": 420,
       "Default": 420,
       "Unit": "s"
+    },
+    "End Pressure Tolerance": {
+      "Value": 50,
+      "Default": 50,
+      "Unit": "mbar"
     }
   },
   "Separate": {
@@ -126,15 +126,15 @@
       "Default": 450,
       "Unit": "\u00b0C"
     },
-    "Clean Trap Duration": {
-      "Value": 60,
-      "Default": 60,
-      "Unit": "s"
-    },
     "Trap Cooling Temperature": {
       "Value": 10,
       "Default": 10,
       "Unit": "\u00b0C"
+    },
+    "Clean Trap Duration": {
+      "Value": 60,
+      "Default": 60,
+      "Unit": "s"
     }
   }
 }

@@ -132,6 +132,7 @@ class Procedures:
         for _ in self.reactors:
             status = self.tcpip.get_status()
             while status != "STS READY":
+                time.sleep(1)
                 status = self.tcpip.get_status() 
                 if not self.running:
                     return
@@ -144,7 +145,6 @@ class Procedures:
                     elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
                         self.parent.stop()
                         return
-                time.sleep(1)
 
             index = int(self.tcpip.get_index().split()[1])
             name = self.tcpip.get_name(index).split()[2]
@@ -282,7 +282,7 @@ class Procedures:
             cfg = self.config["Conditioning"]
             reactors_evac_dur = cfg["Reactors Evacuation Duration"]["Value"]
             leak_test_dur = cfg["Leak Test Duration"]["Value"]
-            leak_press_limit = cfg["Leak Pressure Limit"]["Value"]
+            leak_press_limit = cfg["Leak Pressure Limit"]["Value"]/1000
             self.set_active()
 
             self.worker.message.emit("Evacuating reactors")
@@ -310,7 +310,7 @@ class Procedures:
             if len(exceeding) > 0:
                 text = "Leak limit exceeded by"
                 for i in exceeding:
-                    text += " Reactor " + i
+                    text += " Reactor " + str(i)
                 wait = threading.Event()
                 self.worker.prompt.emit(text, QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Ignore | QMessageBox.StandardButton.Cancel, wait)
                 wait.wait()
@@ -322,25 +322,20 @@ class Procedures:
             return 0
 
     def h2_cleaning(self):
+        with open(self.filename, "r") as f:
+            self.config = json.load(f)
+        cfg = self.config["Conditioning"]
+        reactors_evac_dur = cfg["Reactors Evacuation Duration"]["Value"]
+        h2_press_limit = cfg["H2 Pressure Limit"]["Value"]/1000
+        h2_cycle_reps = cfg["H2 Cycle Repetitions"]["Value"]
+        h2_cycle_dur = cfg["H2 Cycle Duration"]["Value"]
+        self.set_active()
+
+        self.worker.message.emit("Cleaning reactors")
+        self.smc.set(self.get_idx(self.valve_reactors), 1)
+        time.sleep(0.4)
+
         for _ in range(h2_cycle_reps):
-            while not self.panel.auto.running:
-                self.worker.message.emit("")
-                if not self.running:
-                    return 
-                time.sleep(1)
-            with open(self.filename, "r") as f:
-                self.config = json.load(f)
-            cfg = self.config["Conditioning"]
-            reactors_evac_dur = cfg["Reactors Evacuation Duration"]["Value"]
-            h2_press_limit = cfg["H2 Pressure Limit"]["Value"]
-            h2_cycle_reps = cfg["H2 Cycle Repetitions"]["Value"]
-            h2_cycle_dur = cfg["H2 Cycle Duration"]["Value"]
-            self.set_active()
-
-            self.worker.message.emit("Cleaning reactors")
-            self.smc.set(self.get_idx(self.valve_reactors), 1)
-            time.sleep(0.4)
-
             self.smc.set(self.get_idx(self.valve_h2), 1)
             while all(r.get_value() < h2_press_limit for r in self.reactors):
                 if not self.running:
@@ -366,9 +361,12 @@ class Procedures:
         cfg = self.config["Conditioning"]
         offset_vac_dur = cfg["Offset Vacuum Duration"]["Value"]
         self.set_active()
-
+            
+        self.schematic.worker.set_running(True)                
         self.worker.message.emit("Correcting offset")
-        self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 1)
+        self.smc.close_all()
+        time.sleep(0.4)
+        self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors + self.valve_lines), 1)
         status = self.wait(offset_vac_dur)
         if status:
             return -1
@@ -386,6 +384,8 @@ class Procedures:
             json.dump(settings, f, indent=2)
 
         self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 0)
+        self.worker.message.emit("")
+        self.schematic.worker.set_running(False)                
         return 0
 
     def conditioning(self):
@@ -400,10 +400,10 @@ class Procedures:
 
         self.smc.close_all()
         time.sleep(0.4)
-        self.smc.set([v.id for v in self.valve_lines], 1)
+        self.smc.set(self.get_idx(self.valve_lines), 1)
 
         while not self.panel.auto.running:
-            self.worker.message.emit("")
+            self.worker.message.emit("Paused")
             if not self.running:
                 return 
             time.sleep(1)
@@ -417,7 +417,7 @@ class Procedures:
         self.helper.request(self.process_runin)
 
         while not self.panel.auto.running:
-            self.worker.message.emit("")
+            self.worker.message.emit("Paused")
             if not self.running:
                 return 
             time.sleep(1)
@@ -428,7 +428,7 @@ class Procedures:
         self.parent.save(self.timestamp)
 
         while not self.panel.auto.running:
-            self.worker.message.emit("")
+            self.worker.message.emit("Paused")
             if not self.running:
                 return 
             time.sleep(1)
@@ -439,7 +439,7 @@ class Procedures:
         self.parent.save(self.timestamp)
 
         while not self.panel.auto.running:
-            self.worker.message.emit("")
+            self.worker.message.emit("Paused")
             if not self.running:
                 return 
             time.sleep(1)
@@ -450,7 +450,7 @@ class Procedures:
         self.parent.save(self.timestamp)
 
         while not self.panel.auto.running:
-            self.worker.message.emit("")
+            self.worker.message.emit("Paused")
             if not self.running:
                 return 
             time.sleep(1)
@@ -472,7 +472,7 @@ class Procedures:
             line_step = cfg["Line Step Duration"]["Value"]
             co2_press_scaling = cfg["CO2 Pressure Scaling"]["Value"]
             h2_step = cfg["H2 Step Duration"]["Value"]
-            load_press_limit = cfg["Load Pressure Limit"]["Value"]
+            load_press_limit = cfg["Load Pressure Limit"]["Value"]/1000
             if trap_heating_temp > 550:
                 wait = threading.Event()
                 self.worker.prompt.emit("Trap heating temperature exceeds limit.", QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Cancel, wait)
@@ -635,9 +635,8 @@ class Procedures:
         self.smc.close_all()
 
         i = 0
-        i_complete = []
         while i < len(self.reactors_all):
-            if not self.reactors_all[i].active or i in i_complete:
+            if not self.reactors_all[i].active:
                 i += 1
             else:
                 self.parent.panel.next.combo.setCurrentIndex(i)
@@ -645,7 +644,7 @@ class Procedures:
 
         while i < len(self.reactors_all):
             while not self.panel.auto.running:
-                self.worker.message.emit("")
+                self.worker.message.emit("Paused")
                 if not self.running:
                     return 
                 time.sleep(1)
@@ -685,7 +684,7 @@ class Procedures:
             weight = float(wgh[2])
 
             while not self.panel.auto.running:
-                self.worker.message.emit("")
+                self.worker.message.emit("Paused")
                 if not self.running:
                     return 
                 time.sleep(1)
@@ -720,18 +719,24 @@ class Procedures:
                 continue
             
             while not self.panel.auto.running:
-                self.worker.message.emit("")
+                self.worker.message.emit("Paused")
                 if not self.running:
                     return 
                 time.sleep(1)   
             i = self.parent.panel.next.combo.currentIndex()
+            while i < len(self.reactors_all):
+                if not self.reactors_all[i].active:
+                    i += 1
+                else:
+                    break
             if i >= len(self.reactors_all):
                 break
             i_next = i + 1
             while i_next < len(self.reactors_all):
-                if not self.reactors_all[i_next].active or i_next in i_complete:
+                if not self.reactors_all[i_next].active:
                     i_next += 1
-                continue
+                else:
+                    break
             self.parent.panel.next.combo.setCurrentIndex(i_next)
             self.table.set_entry(name.split("-")[0].split("_")[0], i, 0)
             self.table.set_entry(f"{weight:.2f}", i, 1)
@@ -743,12 +748,11 @@ class Procedures:
                 return 
             self.worker.message.emit("Saving")    
             self.parent.save(self.timestamp)
-            i_complete.append(i)
             i = i_next
 
         self.helper.request(self.ea_sleep)
         while not self.panel.auto.running:
-            self.worker.message.emit("")
+            self.worker.message.emit("Paused")
             if not self.running:
                 return 
             time.sleep(1)
@@ -784,7 +788,7 @@ class Procedures:
                 self.config = json.load(f)
             cfg = self.config["Reaction"]
             reaction_temp = cfg["Reaction Temperature"]["Value"]
-            reaction_dur = cfg["Reaction Duration"]["Value"]
+            reaction_dur = cfg["Reaction Duration"]["Value"]*60
             end_press_tol = cfg["End Pressure Tolerance"]["Value"]
             cooling_dur = cfg["Cooling Duration"]["Value"]
             if reaction_temp > 650:
@@ -804,7 +808,7 @@ class Procedures:
             self.set_peltiers(1)
 
             while not self.panel.auto.running:
-                self.worker.message.emit("")
+                self.worker.message.emit("Paused")
                 if not self.running:
                     return 
                 time.sleep(1)
@@ -816,7 +820,7 @@ class Procedures:
                 time.sleep(1)
 
             while not self.panel.auto.running:
-                self.worker.message.emit("")
+                self.worker.message.emit("Paused")
                 if not self.running:
                     return 
                 time.sleep(1)
@@ -840,13 +844,13 @@ class Procedures:
             for r in self.reactors:
                 pressure_end = r.get_value()
                 self.table.set_entry(int(pressure_end * 1000), r.id - 1, 5)
-                self.table.set_entry(int(reaction_dur / 60), r.id - 1, 9)
+                self.table.set_entry(int(reaction_dur), r.id - 1, 9)
                 self.table.set_entry(self.timestamp, r.id - 1, 10)
             self.worker.message.emit("Saving")    
             self.parent.save(self.timestamp)
             self.table.store()
 
-            if any(1000*r.get_value() > int(self.table.get_entry(r.id-1, 4)) - 3*int(self.table.get_entry(r.id-1, 2)) + 3*1000*end_press_tol for r in self.reactors):
+            if any(1000*r.get_value() > int(self.table.get_entry(r.id-1, 4)) - 3*int(self.table.get_entry(r.id-1, 2)) + 3*end_press_tol for r in self.reactors):
                 if not self.running:
                     return
                 wait = threading.Event()

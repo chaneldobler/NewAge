@@ -18,7 +18,7 @@ class Configurations(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setStyleSheet(components.styleSheet)
-        self.setFixedSize(1950, 550)
+        self.setFixedSize(1500, 500)
         self.filename = "procedures_config.json"
 
         with open(self.filename, "r") as f:
@@ -74,10 +74,10 @@ class GUI(QMainWindow):
             QTabBar::tab {
                 height: 30px;
                 min-width: 100px;
-                font-size: 20px;
+                font-size: 16px;
                 background-color: #f5f5f5;
                 border: 1px solid black;
-                padding: 8px 16px;
+                padding: 4px 8px;
             }
             QTabBar::tab:selected {
                 background-color: #f5f5f5;
