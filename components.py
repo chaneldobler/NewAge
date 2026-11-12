@@ -14,14 +14,6 @@ styleSheet = """
         background-color: #eeeeee;
         border: 1px solid grey;
     }
-    QPushButton:hover {
-        color: white;
-        background-color: grey;
-    }
-    QPushButton:pressed {
-        color: white;
-        background-color: grey;
-    }
     QLabel {
         color: black;
         background-color: white;
@@ -32,7 +24,7 @@ styleSheet = """
     }
     Title {
         color: white;
-        background-color: grey;
+        background-color: black;
         font-size: 18px;
         font-weight: bold;
     }

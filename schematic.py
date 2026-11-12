@@ -35,16 +35,7 @@ class Valve(QWidget):
             background-color: {bg_color};
             border-radius: 19px;
             border: 1px solid grey;
-        }}
-        QPushButton:hover {{
-            color: white;
-            background-color: grey;
-        }}
-        QPushButton:pressed {{
-            color: white;
-            background-color: grey;
-        }}
-        """)
+        }}""")
 
 class OpenClose(QFrame):
     def __init__(self, parent = None, name: str = "Reactor Valves", text_1: str = "Open", text_2: str = "Close"):
@@ -61,7 +52,7 @@ class OpenClose(QFrame):
         self.container.addWidget(self.btn_close, 1, 1)
 
 class Symbol(QFrame):
-    def __init__(self, parent = None, name: str = "", color: str = "grey", id: int = 0, nr: int = 1, **kwargs):
+    def __init__(self, parent = None, name: str = "", color: str = "black", id: int = 0, nr: int = 1, **kwargs):
         super().__init__(parent, **kwargs)
         self.title = c.Title(name, alignment=Qt.AlignmentFlag.AlignCenter)
         self.color = color
@@ -86,9 +77,9 @@ class Running:
             self.running = running
             self.set_color()
 
-    def set_color(self):
-        color = self.color if self.running else "grey"
-        self.title.setStyleSheet(f"background-color: {color};")
+    # def set_color(self):
+    #     color = self.color if self.running else "black"
+    #     self.title.setStyleSheet(f"background-color: {color};")
 
 class Active:
     def __init__(self, **kwargs):
@@ -100,22 +91,22 @@ class Active:
             self.active = active
             self.set_color()
 
-    def set_color(self):
-        color = self.color if self.active else "black"
-        self.title.setStyleSheet(f"background-color: {color};")
+    # def set_color(self):
+    #     color = self.color if self.active else "grey"
+    #     self.title.setStyleSheet(f"background-color: {color};")
 
 class ActiveRunning(Active, Running):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_color(self):
-        if not self.active:
-            color = "black"
-        elif not self.running:
-            color = "grey"
-        else:
-            color = self.color
-        self.title.setStyleSheet(f"background-color: {color};")
+    # def set_color(self):
+    #     if not self.active:
+    #         color = "grey"
+    #     elif not self.running:
+    #         color = "black"
+    #     else:
+    #         color = self.color
+    #     self.title.setStyleSheet(f"background-color: {color};")
 
 class Value:
     def __init__(self, unit: str = "", **kwargs):
@@ -151,7 +142,7 @@ class Field:
         self.container.addWidget(self.unit, 0, 3, 1, 1, Qt.AlignmentFlag.AlignRight)
 
 class Toggle(ActiveRunning):
-    def __init__(self, running_txt: str = "Activate", active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
+    def __init__(self, running_txt: str = "Deactivate", active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
         super().__init__(**kwargs)
         self.running_txt = running_txt
         self.active_txt = active_txt
@@ -228,11 +219,35 @@ class Auto(Toggle, Symbol):
     def __init__(self, color: str = QColor.fromHslF(0.6, 0.9, 0.3).name(), **kwargs):
         super().__init__(color=color, **kwargs)
 
+class Lift(QFrame):    
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.active = False
+
+        self.title = c.Title("Lift")
+        self.button = QPushButton("Up")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0)
+        self.container.addWidget(self.button, 1, 0)
+
+    def set_text(self):
+        if self.active:
+            self.button.setText("Down")
+        else:
+            self.button.setText("Up")
+
+    def set_active(self, active: bool):
+        if self.active != active:
+            self.active = active
+            self.set_text()        
+
 class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1300, 1100)
+        self.setFixedSize(1000, 1000)
         self.setStyleSheet(c.styleSheet)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)
@@ -266,15 +281,7 @@ class Schematic(QWidget):
         self.vacuum = Symbol(parent=self, name="Vac")
         self.ea = Symbol(parent=self, name="EA")
 
-        self.btn = OpenClose(self)
-        self.clean_trap = Auto(parent=self, name="Clean Trap", active_txt="Start")
-        self.clean_trap.button.clicked.disconnect()
-        self.offset = Auto(parent=self, name="Correct Offset", active_txt="Start")
-        self.offset.button.clicked.disconnect()
-        self.lift = OpenClose(parent=self, name="Lift Ovens", text_1="Up", text_2="Down")
-
-        self.worker = Display(parent=self, name="Worker")
-        self.helper = Display(parent=self, name="Helper")
+        self.lift = Lift(self)
 
         with open("settings.json", "r") as f:
             settings = json.load(f)
@@ -287,39 +294,33 @@ class Schematic(QWidget):
         self.grid = QGridLayout(self)
 
         for i, v in enumerate(self.valve_reactors[:5]):
-            self.grid.addWidget(v, 9, i + 5, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.grid.addWidget(v, i + 2, 1, alignment=Qt.AlignmentFlag.AlignCenter)
         for i, v in enumerate(self.valve_reactors[5:10]):
-            self.grid.addWidget(v, 1, 9 - i, alignment=Qt.AlignmentFlag.AlignCenter) 
-        self.grid.addWidget(self.valve_lines[0], 7, 5, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.valve_lines[1], 3, 5, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.valve_vacuum, 6, 5, alignment=Qt.AlignmentFlag.AlignRight)
-        self.grid.addWidget(self.valve_trap, 5, 5, alignment=Qt.AlignmentFlag.AlignLeft)
-        self.grid.addWidget(self.valve_h2, 4, 5, alignment=Qt.AlignmentFlag.AlignRight)
-        self.grid.addWidget(self.valve_sampling, 5, 3, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.grid.addWidget(v, 6 - i, 9, alignment=Qt.AlignmentFlag.AlignCenter) 
+        self.grid.addWidget(self.valve_lines[0], 2, 3, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.valve_lines[1], 2, 7, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.valve_vacuum, 2, 4, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.grid.addWidget(self.valve_trap, 2, 5, alignment=Qt.AlignmentFlag.AlignTop)
+        self.grid.addWidget(self.valve_h2, 2, 6, alignment=Qt.AlignmentFlag.AlignBottom)
+        self.grid.addWidget(self.valve_sampling, 0, 5, alignment=Qt.AlignmentFlag.AlignCenter)
 
         for i, r in enumerate(self.reactors[:5]):
-            self.grid.addWidget(r, 10, i + 5, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.grid.addWidget(r, i + 2, 0, alignment=Qt.AlignmentFlag.AlignCenter)
         for i, r in enumerate(self.reactors[5:]):
-            self.grid.addWidget(r, 0, 9 - i, alignment=Qt.AlignmentFlag.AlignCenter)
+            self.grid.addWidget(r, 6 - i, 10, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.grid.addWidget(self.ovens[0], 6, 9, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.ovens[1], 4, 9, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.trap, 4, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.ovens[0], 6, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.ovens[1], 6, 6, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.trap, 1, 6, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.grid.addWidget(self.peltiers[0], 6, 8, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.peltiers[1], 4, 8, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.peltiers[0], 5, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.peltiers[1], 5, 6, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.grid.addWidget(self.h2, 4, 6, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.vacuum, 6, 6, alignment=Qt.AlignmentFlag.AlignCenter)
-        self.grid.addWidget(self.ea, 6, 3, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.h2, 3, 6, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.vacuum, 3, 4, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.grid.addWidget(self.ea, 0, 4, alignment=Qt.AlignmentFlag.AlignCenter)
 
-        self.grid.addWidget(self.btn, 6, 1, 1, 2)
-        self.grid.addWidget(self.clean_trap, 7, 1, 1, 2)
-        self.grid.addWidget(self.offset, 9, 1, 1, 2)
-        self.grid.addWidget(self.lift, 5, 1, 1, 2)
-
-        self.grid.addWidget(self.worker, 1, 1, 1, 2)
-        self.grid.addWidget(self.helper, 3, 1, 1, 2)
+        self.grid.addWidget(self.lift, 6, 5, alignment=Qt.AlignmentFlag.AlignCenter)
 
     def get_reactor_idx(self):
         return [r.id for r in self.reactors]
@@ -342,6 +343,9 @@ class Schematic(QWidget):
             if v.id <= len(values):
                 v.set_active(values[v.id - 1])
 
+    def set_lift_active(self, values):
+        self.lift.set_active(values[self.valve_lift.id - 1])
+
     def stop(self):
         for h in self.heaters:
             h.set_running(False)
@@ -362,23 +366,23 @@ class Schematic(QWidget):
         pen = QPen(QColor("grey"), 4)
         painter.setPen(pen)
 
-        # Top and Bottom Lines
-        painter.drawLine(self.grid.cellRect(2, 5).center(), self.grid.cellRect(2, 9).center())
-        painter.drawLine(self.grid.cellRect(8, 5).center(), self.grid.cellRect(8, 9).center())
+        # Right and Left Lines
+        painter.drawLine(self.grid.cellRect(2, 8).center(), self.grid.cellRect(6, 8).center())
+        painter.drawLine(self.grid.cellRect(2, 2).center(), self.grid.cellRect(6, 2).center())
         for i in range(5):
-            painter.drawLine(self.grid.cellRect(0, 5 + i).center(), self.grid.cellRect(2, 5 + i).center())
-            painter.drawLine(self.grid.cellRect(8, 5 + i).center(), self.grid.cellRect(10, 5 + i).center())
+            painter.drawLine(self.grid.cellRect(i + 2, 10).center(), self.grid.cellRect(i + 2, 8).center())
+            painter.drawLine(self.grid.cellRect(i + 2, 2).center(), self.grid.cellRect(i + 2, 0).center())
 
-        # Left Line
-        painter.drawLine(self.grid.cellRect(2, 5).center(), self.grid.cellRect(8, 5).center())
-        painter.drawLine(self.grid.cellRect(4, 5).center(), self.grid.cellRect(4, 6).center())
-        painter.drawLine(self.grid.cellRect(6, 5).center(), self.grid.cellRect(6, 6).center())
+        # Top Line
+        painter.drawLine(self.grid.cellRect(2, 8).center(), self.grid.cellRect(2, 2).center())
+        painter.drawLine(self.grid.cellRect(2, 6).center(), self.grid.cellRect(3, 6).center())
+        painter.drawLine(self.grid.cellRect(2, 4).center(), self.grid.cellRect(3, 4).center())
 
         # Trap Switch Loop
-        painter.drawLine(self.grid.cellRect(4, 3).center(), self.grid.cellRect(6, 3).center())
-        painter.drawLine(self.grid.cellRect(4, 4).center(), self.grid.cellRect(5, 4).center())
-        painter.drawLine(self.grid.cellRect(4, 3).center(), self.grid.cellRect(4, 4).center())
-        painter.drawLine(self.grid.cellRect(5, 3).center(), self.grid.cellRect(5, 5).center())
+        painter.drawLine(self.grid.cellRect(0, 6).center(), self.grid.cellRect(0, 4).center())
+        painter.drawLine(self.grid.cellRect(1, 6).center(), self.grid.cellRect(1, 5).center())
+        painter.drawLine(self.grid.cellRect(0, 6).center(), self.grid.cellRect(1, 6).center())
+        painter.drawLine(self.grid.cellRect(0, 5).center(), self.grid.cellRect(2, 5).center())
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

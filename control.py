@@ -17,7 +17,7 @@ class History(QWidget):
     def __init__(self, parent, pressures):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1400, 1100)
+        self.setFixedSize(1200, 900)
         self.pressures = pressures
         self.history = [[] for _ in self.pressures]
         self.filename = "history.json"
@@ -84,6 +84,10 @@ class History(QWidget):
         self.graph.enableAutoRange(axis='x')
         self.graph.setYRange(0, 2.1)
 
+    def auto(self):
+        self.graph.getViewBox().autoRange()
+        self.graph.enableAutoRange(axis='x')
+
     def reset(self):
         self.running = False
         self.history = [[] for _ in self.pressures]
@@ -120,14 +124,14 @@ class Table(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1300, 400)
+        self.setFixedSize(1225, 450)
         self.filename = "table.json"
 
         self.db = db.Database()
 
-        self.headers = ["Sample \n Name", "Weight \n [mg]",
+        self.headers = ["Sample Name", "Weight \n [mg]",
                          "CO2 \n [\u03bcg]", "CO2 fin \n [\u03bcg]", "CO2+H2 \n [mbar]", "p end \n [mbar]", 
-                         "N [%]", "C [%]", "C / N", "Reaction \n [min]", "Date \n [Y-M-D]"]
+                         "N [%]", "C [%]", "C / N", "Reaction \n [min]", "Date [Y-M-D H:M:S]"]
         self.reactors = [f"Reactor {i+1}" for i in range(10)]
 
         self.model = QStandardItemModel(len(self.reactors), len(self.headers))
@@ -139,6 +143,8 @@ class Table(QWidget):
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.view.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.view.horizontalHeader().setSectionResizeMode(10, QHeaderView.ResizeToContents)
         self.view.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
         # self.view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         # self.view.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
@@ -188,6 +194,10 @@ class Table(QWidget):
         for row in range(self.model.rowCount()):
             for col in range(self.model.columnCount()):
                 self.model.setItem(row, col, None)
+        self.view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.view.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.view.horizontalHeader().setSectionResizeMode(10, QHeaderView.ResizeToContents)
+        self.view.verticalHeader().setSectionResizeMode(QHeaderView.Stretch)
 
     def store(self):
         map = {
@@ -287,11 +297,72 @@ class Next(QFrame):
         self.container.addWidget(self.title, 0, 0)
         self.container.addWidget(self.combo, 1, 0)
 
+class Logging(QFrame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+
+        self.title = c.Title("Logging", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.start = QPushButton("Start")
+        self.pause = QPushButton("Stop")
+        self.reset = QPushButton("Reset")
+        self.load = QPushButton("Load")
+        self.save = QPushButton("Save")
+        self.store = QPushButton("Store DB")
+        self.auto = QPushButton("A-Zoom")
+        self.default = QPushButton("D-Zoom")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0, 1, 1)
+        self.container.addWidget(self.start, 1, 0, 1, 1)
+        self.container.addWidget(self.pause, 2, 0, 1, 1)
+        self.container.addWidget(self.reset, 3, 0, 1, 1)
+        self.container.addWidget(self.load, 6, 0, 1, 1)
+        self.container.addWidget(self.save, 4, 0, 1, 1)
+        self.container.addWidget(self.store, 5, 0, 1, 1)        
+        self.container.addWidget(self.auto, 7, 0, 1, 1)
+        self.container.addWidget(self.default, 8, 0, 1, 1)
+
+class SidePanel(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setFixedSize(220, 900)
+        self.setStyleSheet(c.styleSheet)
+
+        self.reactor_valves = schematic.OpenClose(self)
+        self.clean_trap = schematic.Auto(
+            parent=self,
+            name="Clean Trap",
+            active_txt="Start",
+            inactive_txt="Start",
+            running_txt="Start"
+        )
+        self.clean_trap.button.clicked.disconnect()
+        self.offset = schematic.Auto(
+            parent=self,
+            name="Correct Offset",
+            active_txt="Start",
+            inactive_txt="Start",
+            running_txt="Start"
+        )
+        self.offset.button.clicked.disconnect()
+
+        self.logging = Logging(self)
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.reactor_valves, 8, 0)
+        self.container.addWidget(self.clean_trap, 9, 0)
+        self.container.addWidget(self.offset, 10, 0)
+        self.container.addWidget(QWidget(), 7, 0)
+        self.container.addWidget(QWidget(), 6, 0)
+        self.container.addWidget(self.logging, 1, 0)
+
 class Panel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1200, 400)
+        self.setFixedSize(220, 1000)
         self.setStyleSheet(c.styleSheet)
 
         self.auto = schematic.Auto(
@@ -304,6 +375,8 @@ class Panel(QWidget):
         self.auto.button.clicked.disconnect()
         self.auto.set_active(False)
         self.auto.set_text()
+        self.abort = c.Button(parent=self, name="Abort")
+
         self.conditioning = schematic.Auto(
             parent=self, 
             name="Conditioning",
@@ -317,52 +390,27 @@ class Panel(QWidget):
             name="Reaction",
         )
         self.next = Next(self)
-        self.abort = c.Button(parent=self, name="Abort")
-        self.storage = Storage(self)
+
+        self.worker = schematic.Display(
+            parent=self,
+            name="Worker"
+        )
+        self.helper = schematic.Display(
+            parent=self,
+            name="Helper"
+        )
 
         self.container = QGridLayout(self)
         self.container.addWidget(self.auto, 0, 0)
-        self.container.addWidget(self.conditioning, 0, 1)
-        self.container.addWidget(self.load_samples, 0, 2)
-        self.container.addWidget(self.reaction, 0, 3)
-        self.container.addWidget(self.next, 0, 4)
         self.container.addWidget(self.abort, 1, 0, alignment=Qt.AlignmentFlag.AlignTop)
-        self.container.addWidget(self.storage, 2, 0)
-
-class Storage(QFrame):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.setStyleSheet(c.styleSheet)
-
-        self.title = c.Title("Logging", alignment=Qt.AlignmentFlag.AlignCenter)
-        self.reset = QPushButton("Reset")
-        self.save = QPushButton("Save")
-        self.load = QPushButton("Load")
-        self.store = QPushButton("Store DB")
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0)
-        self.container.addWidget(self.reset, 1, 0)
-        self.container.addWidget(self.save, 3, 0)
-        self.container.addWidget(self.store, 4, 0)
-        self.container.addWidget(self.load, 2, 0)
-
-class GraphControls(QWidget):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.setFixedSize(210, 340)
-        self.setStyleSheet(c.styleSheet)
-
-        self.start = QPushButton("Start")
-        self.pause = QPushButton("Pause")
-        self.default = QPushButton("D")
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.start, 0, 0)
-        self.container.addWidget(self.default, 0, 2)
-        self.container.addWidget(self.pause, 0, 1)
+        self.container.addWidget(QWidget(), 2, 0)
+        self.container.addWidget(self.conditioning, 3, 0)
+        self.container.addWidget(self.load_samples, 4, 0)
+        self.container.addWidget(self.reaction, 5, 0)
+        self.container.addWidget(self.next, 6, 0)
+        self.container.addWidget(QWidget(), 7, 0)
+        self.container.addWidget(self.worker, 8, 0)
+        self.container.addWidget(self.helper, 9, 0)
 
 class Control(QWidget):
     def __init__(self, parent):
@@ -381,11 +429,11 @@ class Control(QWidget):
         self.graph = History(self, self.schematic.reactors)
         self.table = Table(self)
         self.panel = Panel(self)
-        self.graph_ctrl = GraphControls(self)
+        self.sidepanel = SidePanel(self)
 
         self.worker = worker.Worker()
         self.helper = worker.Worker()
-        self.smc_worker = worker.Worker(0.2, self.smc.get)
+        self.smc_worker = worker.Worker(0.1, self.smc.get)
         self.keller_worker = worker.Worker(0.5, self.keller.get, self.schematic.get_reactor_idx())
         self.tm_worker = worker.Worker(1.0, self.tm.get, self.schematic.get_heater_idx())
         self.peltier_worker = worker.Worker(1.0)
@@ -395,36 +443,37 @@ class Control(QWidget):
             self.worker, self.helper, self.table, self.schematic, self.panel
         )
 
-        self.schematic.btn.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
-        self.schematic.btn.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
-        self.schematic.clean_trap.button.clicked.connect(lambda: self.helper.request(self.procedures.clean_trap))
-        self.schematic.offset.button.clicked.connect(lambda: self.worker.request(self.procedures.correct_offset))
-        self.schematic.lift.btn_open.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], 1))
-        self.schematic.lift.btn_close.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], 0))
+        self.sidepanel.reactor_valves.btn_open.clicked.connect(lambda: self.procedures.set_reactor_valves(1))
+        self.sidepanel.reactor_valves.btn_close.clicked.connect(lambda: self.procedures.set_reactor_valves(0))
+        self.sidepanel.clean_trap.button.clicked.connect(lambda: self.helper.request(self.procedures.clean_trap))
+        self.sidepanel.offset.button.clicked.connect(lambda: self.worker.request(self.procedures.correct_offset))
 
         self.panel.auto.button.clicked.connect(self.start)
         self.panel.abort.button.clicked.connect(self.stop)
 
-        self.panel.storage.reset.clicked.connect(self.reset)
-        self.panel.storage.save.clicked.connect(lambda: self.save(time.time()))
-        self.panel.storage.load.clicked.connect(self.load)
-        self.panel.storage.store.clicked.connect(self.table.store)
+        self.sidepanel.logging.reset.clicked.connect(self.reset)
+        self.sidepanel.logging.save.clicked.connect(lambda: self.save(time.time()))
+        self.sidepanel.logging.load.clicked.connect(self.load)
+        self.sidepanel.logging.store.clicked.connect(self.table.store)
 
-        self.graph_ctrl.default.clicked.connect(self.graph.default)
-        self.graph_ctrl.start.clicked.connect(lambda: self.graph.set_running(True))
-        self.graph_ctrl.pause.clicked.connect(lambda: self.graph.set_running(False))
+        self.sidepanel.logging.default.clicked.connect(self.graph.default)
+        self.sidepanel.logging.auto.clicked.connect(self.graph.auto)
+        self.sidepanel.logging.start.clicked.connect(lambda: self.graph.set_running(True))
+        self.sidepanel.logging.pause.clicked.connect(lambda: self.graph.set_running(False))
 
         for v in self.schematic.valves:
             v.button.clicked.connect(self.request_wrapper(v))
+        self.schematic.lift.button.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], not self.schematic.lift.active))
 
-        self.worker.message.connect(self.schematic.worker.display.setText)
-        self.helper.message.connect(self.schematic.helper.display.setText)
+        self.worker.message.connect(self.panel.worker.display.setText)
+        self.helper.message.connect(self.panel.helper.display.setText)
         self.worker.prompt.connect(self.prompt)
         self.helper.prompt.connect(self.prompt)
         self.smc_worker.update.connect(self.schematic.set_valves_active)
         self.keller_worker.update.connect(self.schematic.set_reactor_values)
         self.tm_worker.update.connect(self.schematic.set_heater_values)
         self.keller_worker.update.connect(self.graph.set_stamp)
+        self.smc_worker.update.connect(self.schematic.set_lift_active)
 
         self.worker.start()
         self.helper.start()
@@ -434,15 +483,15 @@ class Control(QWidget):
         self.peltier_worker.start()
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.schematic, 0, 0)
-        self.container.addWidget(self.graph, 0, 1)
-        self.container.addWidget(self.panel, 1, 1)
-        self.container.addWidget(self.table, 1, 0)
-        self.container.addWidget(self.graph_ctrl, 0, 1, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
+        self.container.addWidget(self.sidepanel, 0, 2, alignment=Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.schematic, 0, 1)
+        self.container.addWidget(self.graph, 0, 3, alignment=Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.panel, 0, 0, alignment=Qt.AlignmentFlag.AlignTop)
+        self.container.addWidget(self.table, 1, 0, 1, 3)
 
     def start(self):
         if not self.panel.auto.active:
-            self.graph.running = True
+            self.graph.set_running(True)
             self.panel.auto.set_active(True)
             self.panel.auto.set_running(True)
             self.panel.auto.set_text()
@@ -481,6 +530,7 @@ class Control(QWidget):
         self.helper.clear()
 
         self.schematic.stop()
+        self.graph.set_running(False)
 
         self.smc.close_all()
         self.tm.stop([h.id for h in self.schematic.heaters])
@@ -502,12 +552,17 @@ class Control(QWidget):
         self.panel.reaction.set_running(False)
         self.panel.reaction.set_text() # move funcs
 
+        self.sidepanel.offset.set_active(True)
+        self.sidepanel.clean_trap.set_active(True)
+        self.sidepanel.offset.set_running(False)
+        self.sidepanel.clean_trap.set_running(False)
+
         self.procedures.running = False
         self.worker.message.emit("")
         self.helper.message.emit("")
 
-        self.schematic.worker.set_running(False)
-        self.schematic.helper.set_running(False)
+        self.panel.worker.set_running(False)
+        self.panel.helper.set_running(False)
 
         self.panel.next.combo.setCurrentIndex(10)
 

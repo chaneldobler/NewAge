@@ -27,7 +27,6 @@ class Database:
             WHERE sample_nr = %s 
               AND prep_nr = %s 
               AND target_nr = %s
-              AND ({category} IS NULL OR {category} = 0)
             LIMIT 1;
         """
 
@@ -53,7 +52,3 @@ class Database:
                 cursor.close()
             if 'conn' in locals() and conn.is_connected():
                 conn.close()
-
-if __name__ == "__main__":
-    db = Database()
-    db.store(165767, 1, 2, "reactor_nr", 101)

@@ -1,43 +1,43 @@
 {
   "Reactors": {
     "Reactor 1": {
-      "Offset": 0.105010986328125,
+      "Offset": 0.0963134765625,
       "Slope": 1.0
     },
     "Reactor 2": {
-      "Offset": 0.003753662109375,
+      "Offset": 0.00421142578125,
       "Slope": 1.0
     },
     "Reactor 3": {
-      "Offset": 0.113067626953125,
+      "Offset": 0.10784912109375,
       "Slope": 1.0
     },
     "Reactor 4": {
-      "Offset": 0.05291748046875,
+      "Offset": 0.052825927734375,
       "Slope": 1.0
     },
     "Reactor 5": {
-      "Offset": 0.004302978515625,
+      "Offset": 0.004669189453125,
       "Slope": 1.0
     },
     "Reactor 6": {
-      "Offset": 0.030487060546875,
+      "Offset": 0.0604248046875,
       "Slope": 1.0
     },
     "Reactor 7": {
-      "Offset": 0.005950927734375,
+      "Offset": 0.006866455078125,
       "Slope": 1.0
     },
     "Reactor 8": {
-      "Offset": 0.006683349609375,
+      "Offset": 0.008056640625,
       "Slope": 1.0
     },
     "Reactor 9": {
-      "Offset": 0.004486083984375,
+      "Offset": 0.004852294921875,
       "Slope": 1.0
     },
     "Reactor 10": {
-      "Offset": 0.00311279296875,
+      "Offset": 0.0032958984375,
       "Slope": 1.0
     }
   }
