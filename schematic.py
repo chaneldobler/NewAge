@@ -77,9 +77,9 @@ class Running:
             self.running = running
             self.set_color()
 
-    # def set_color(self):
-    #     color = self.color if self.running else "black"
-    #     self.title.setStyleSheet(f"background-color: {color};")
+    def set_color(self):
+        color = self.color if self.running else "black"
+        self.title.setStyleSheet(f"background-color: {color};")
 
 class Active:
     def __init__(self, **kwargs):
@@ -91,22 +91,22 @@ class Active:
             self.active = active
             self.set_color()
 
-    # def set_color(self):
-    #     color = self.color if self.active else "grey"
-    #     self.title.setStyleSheet(f"background-color: {color};")
+    def set_color(self):
+        color = self.color if self.active else "grey"
+        self.title.setStyleSheet(f"background-color: {color};")
 
 class ActiveRunning(Active, Running):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    # def set_color(self):
-    #     if not self.active:
-    #         color = "grey"
-    #     elif not self.running:
-    #         color = "black"
-    #     else:
-    #         color = self.color
-    #     self.title.setStyleSheet(f"background-color: {color};")
+    def set_color(self):
+        if not self.active:
+            color = "grey"
+        elif not self.running:
+            color = "black"
+        else:
+            color = self.color
+        self.title.setStyleSheet(f"background-color: {color};")
 
 class Value:
     def __init__(self, unit: str = "", **kwargs):
@@ -247,7 +247,7 @@ class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1000, 1000)
+        self.setFixedSize(1000, 950)
         self.setStyleSheet(c.styleSheet)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)

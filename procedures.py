@@ -196,8 +196,6 @@ class Procedures:
                     self.parent.stop()
                     return
 
-            if self.sidepanel.clean_trap.active:
-                self.sidepanel.clean_trap.set_running(True) 
             self.panel.helper.set_running(True)
             self.helper.message.emit("Cleaning trap")
 
@@ -218,7 +216,6 @@ class Procedures:
 
             self.helper.message.emit("")
             self.panel.helper.set_running(False)
-            self.sidepanel.clean_trap.set_running(False)
             return
 
     def ea_sleep(self):
@@ -369,8 +366,6 @@ class Procedures:
         self.set_active()
             
         self.panel.worker.set_running(True)            
-        if self.sidepanel.offset.active:
-            self.sidepanel.offset.set_running(True) 
         self.worker.message.emit("Correcting offset")
         self.smc.close_all()
         time.sleep(0.4)
@@ -394,7 +389,6 @@ class Procedures:
         self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 0)
         self.worker.message.emit("")
         self.panel.worker.set_running(False)    
-        self.sidepanel.offset.set_running(False) 
         return 0
 
     def conditioning(self):
@@ -406,9 +400,6 @@ class Procedures:
         self.panel.worker.set_running(True)
         self.panel.conditioning.set_running(True)
         self.set_active()
-        
-        self.sidepanel.offset.set_active(False)
-        self.sidepanel.clean_trap.set_active(False)  
 
         self.smc.close_all()
         time.sleep(0.4)
@@ -460,9 +451,6 @@ class Procedures:
             return
         self.worker.message.emit("Saving")    
         self.parent.save(self.timestamp)
-
-        self.sidepanel.offset.set_active(True)
-        self.sidepanel.clean_trap.set_active(True)  
 
         while not self.panel.auto.running:
             self.worker.message.emit("Paused")
@@ -677,7 +665,7 @@ class Procedures:
                     wait.wait()
                     if self.prompt_reply == QMessageBox.StandardButton.Retry:
                         continue
-                    elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
+                    elif self.prompt_reply == QMessageBox.StandardButton.Cancel: # signal to main thread to abort
                         self.parent.stop()
                         return -1
 

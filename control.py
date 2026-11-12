@@ -351,18 +351,18 @@ class SidePanel(QWidget):
         self.logging = Logging(self)
 
         self.container = QGridLayout(self)
-        self.container.addWidget(self.reactor_valves, 8, 0)
-        self.container.addWidget(self.clean_trap, 9, 0)
-        self.container.addWidget(self.offset, 10, 0)
-        self.container.addWidget(QWidget(), 7, 0)
-        self.container.addWidget(QWidget(), 6, 0)
-        self.container.addWidget(self.logging, 1, 0)
+        self.container.addWidget(self.logging, 0, 0)
+        self.container.addWidget(QWidget(), 1, 0)
+        self.container.addWidget(self.reactor_valves, 2, 0)
+        self.container.addWidget(self.clean_trap, 3, 0)
+        self.container.addWidget(self.offset, 4, 0)
+        self.container.addWidget(QWidget(), 5, 0)
 
 class Panel(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(220, 1000)
+        self.setFixedSize(220, 950)
         self.setStyleSheet(c.styleSheet)
 
         self.auto = schematic.Auto(
@@ -403,7 +403,6 @@ class Panel(QWidget):
         self.container = QGridLayout(self)
         self.container.addWidget(self.auto, 0, 0)
         self.container.addWidget(self.abort, 1, 0, alignment=Qt.AlignmentFlag.AlignTop)
-        self.container.addWidget(QWidget(), 2, 0)
         self.container.addWidget(self.conditioning, 3, 0)
         self.container.addWidget(self.load_samples, 4, 0)
         self.container.addWidget(self.reaction, 5, 0)
@@ -551,11 +550,6 @@ class Control(QWidget):
         self.panel.reaction.set_active(True)
         self.panel.reaction.set_running(False)
         self.panel.reaction.set_text() # move funcs
-
-        self.sidepanel.offset.set_active(True)
-        self.sidepanel.clean_trap.set_active(True)
-        self.sidepanel.offset.set_running(False)
-        self.sidepanel.clean_trap.set_running(False)
 
         self.procedures.running = False
         self.worker.message.emit("")
