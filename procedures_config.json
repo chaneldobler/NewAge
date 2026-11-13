@@ -1,6 +1,5 @@
 {
   "Conditioning": {
-
     "Conditioning Oven Temperature": {
       "Value": 500,
       "Default": 500,
@@ -42,7 +41,7 @@
       "Unit": "mbar"
     },
     "H2 Cycle Repetitions": {
-      "Value": 3,
+      "Value": 2,
       "Default": 3,
       "Unit": "x"
     }
@@ -64,22 +63,22 @@
       "Unit": "s"
     },
     "Trap Release Duration": {
-      "Value": 20,
+      "Value": 15,
       "Default": 10,
       "Unit": "s"
     },
     "Vacuum Long Step Duration": {
-      "Value": 0.8,
+      "Value": 0.3,
       "Default": 0.8,
       "Unit": "s"
     },
     "H2 Long Step Duration": {
-      "Value": 0.8,
+      "Value": 0.3,
       "Default": 0.8,
       "Unit": "s"
     },
     "Short Step Duration": {
-      "Value": 0.4,
+      "Value": 0.3,
       "Default": 0.4,
       "Unit": "s"
     },

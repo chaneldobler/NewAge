@@ -6,6 +6,7 @@ class Worker(QThread):
     update = Signal(list)
     message = Signal(str)
     prompt = Signal(str, object, object)
+    end = Signal()
 
     def __init__(self, dt=1.0, func=None, *args):
         super().__init__()

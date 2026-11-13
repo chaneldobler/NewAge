@@ -47,7 +47,7 @@ class Procedures:
         self.peltiers = self.schematic.peltiers
 
     def set_active(self):
-        self.reactors = [r for r in self.schematic.reactors if r.active]
+        self.reactors = [r for r in self.schematic.reactors if r.running]
 
         # Close Both Lines
         if not self.reactors:
@@ -72,8 +72,8 @@ class Procedures:
         idx = [r.id for r in self.reactors if r.id <= 5] + [21 - r.id for r in self.reactors if r.id > 5] # Could be better
         self.valve_reactors = [v for v in self.schematic.valves if v.id in idx]
 
-    def set_reactor_valves(self, active):
-        self.smc.set(self.get_idx(self.valve_reactors_all), active)       
+    def set_reactor_valves(self, running: bool):
+        self.smc.set(self.get_idx(self.valve_reactors_all), running)       
 
     def start(self):
         if self.worker.requests.empty():
@@ -144,7 +144,7 @@ class Procedures:
                     if self.prompt_reply == QMessageBox.StandardButton.Retry:
                         continue
                     elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                        self.parent.stop()
+                        self.helper.end.emit()
                         return
 
             index = int(self.tcpip.get_index().split()[1])
@@ -193,10 +193,11 @@ class Procedures:
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
                 elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                    self.parent.stop()
+                    self.helper.end.emit()
                     return
 
             self.panel.helper.set_running(True)
+            self.sidepanel.clean_trap.set_running(True)
             self.helper.message.emit("Cleaning trap")
 
             self.start_heaters([self.trap], clean_trap_temp)
@@ -215,6 +216,7 @@ class Procedures:
             self.smc.set(self.get_idx(self.valve_sampling), 0)
 
             self.helper.message.emit("")
+            self.sidepanel.clean_trap.set_running(False)
             self.panel.helper.set_running(False)
             return
 
@@ -250,7 +252,7 @@ class Procedures:
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
                 elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                    self.parent.stop()
+                    self.worker.end.emit()
                     return -1
             if cond_oven_temp > 650:
                 wait = threading.Event()
@@ -259,7 +261,7 @@ class Procedures:
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
                 elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                    self.parent.stop()
+                    self.worker.end.emit()
                     return -1 
             self.set_active()
 
@@ -310,16 +312,16 @@ class Procedures:
                     exceeding.append(self.reactors[i].id) 
 
             if len(exceeding) > 0:
-                text = "Leak limit exceeded by"
+                text = "Leak limit exceeded by:"
                 for i in exceeding:
-                    text += " Reactor " + str(i)
+                    text += "\n Reactor " + str(i)
                 wait = threading.Event()
                 self.worker.prompt.emit(text, QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Ignore | QMessageBox.StandardButton.Cancel, wait)
                 wait.wait()
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
                 elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                    self.parent.stop()
+                    self.worker.end.emit()
                     return -1
             return 0
 
@@ -365,7 +367,8 @@ class Procedures:
         offset_vac_dur = cfg["Offset Vacuum Duration"]["Value"]
         self.set_active()
             
-        self.panel.worker.set_running(True)            
+        self.panel.worker.set_running(True)   
+        self.sidepanel.offset.set_running(True)         
         self.worker.message.emit("Correcting offset")
         self.smc.close_all()
         time.sleep(0.4)
@@ -388,6 +391,7 @@ class Procedures:
 
         self.smc.set(self.get_idx(self.valve_vacuum + self.valve_reactors), 0)
         self.worker.message.emit("")
+        self.sidepanel.offset.set_running(False)
         self.panel.worker.set_running(False)    
         return 0
 
@@ -395,7 +399,7 @@ class Procedures:
         if not self.panel.conditioning.active:
             self.panel.worker.set_running(False)                
             if self.worker.requests.empty():
-                self.parent.stop()
+                self.worker.end.emit()
             return
         self.panel.worker.set_running(True)
         self.panel.conditioning.set_running(True)
@@ -484,7 +488,7 @@ class Procedures:
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
                 elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                    self.parent.stop()
+                    self.worker.end.emit()
                     return -1 
             self.set_active()
 
@@ -631,7 +635,7 @@ class Procedures:
         if not self.panel.load_samples.active:
             self.panel.worker.set_running(False)
             if self.worker.requests.empty():
-                self.parent.stop()
+                self.worker.end.emit()
             return
         self.panel.worker.set_running(True)
         self.panel.load_samples.set_running(True)
@@ -640,7 +644,7 @@ class Procedures:
 
         i = 0
         while i < len(self.reactors_all):
-            if not self.reactors_all[i].active:
+            if not self.reactors_all[i].running:
                 i += 1
             else:
                 self.parent.panel.next.combo.setCurrentIndex(i)
@@ -666,7 +670,7 @@ class Procedures:
                     if self.prompt_reply == QMessageBox.StandardButton.Retry:
                         continue
                     elif self.prompt_reply == QMessageBox.StandardButton.Cancel: # signal to main thread to abort
-                        self.parent.stop()
+                        self.worker.end.emit()
                         return -1
 
             idx = self.tcpip.get_index().split()
@@ -729,7 +733,7 @@ class Procedures:
                 time.sleep(1)   
             i = self.parent.panel.next.combo.currentIndex()
             while i < len(self.reactors_all):
-                if not self.reactors_all[i].active:
+                if not self.reactors_all[i].running:
                     i += 1
                 else:
                     break
@@ -737,7 +741,7 @@ class Procedures:
                 break
             i_next = i + 1
             while i_next < len(self.reactors_all):
-                if not self.reactors_all[i_next].active:
+                if not self.reactors_all[i_next].running:
                     i_next += 1
                 else:
                     break
@@ -786,7 +790,7 @@ class Procedures:
             if not self.panel.reaction.active:
                 self.panel.worker.set_running(False)
                 if self.worker.requests.empty():
-                    self.parent.stop()
+                    self.worker.end.emit()
                 return
             with open(self.filename, "r") as f:
                 self.config = json.load(f)
@@ -802,7 +806,7 @@ class Procedures:
                 if self.prompt_reply == QMessageBox.StandardButton.Retry:
                     continue
                 elif self.prompt_reply == QMessageBox.StandardButton.Cancel:
-                    self.parent.stop()
+                    self.worker.end.emit()
                     return -1 
             self.panel.worker.set_running(True)
             self.panel.reaction.set_running(True)
@@ -873,7 +877,7 @@ class Procedures:
 
             self.smc.close_all()
             self.panel.reaction.set_running(False)
-            self.parent.stop()
+            self.worker.end.emit()
             return 
 
             

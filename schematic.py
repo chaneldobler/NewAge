@@ -37,6 +37,30 @@ class Valve(QWidget):
             border: 1px solid grey;
         }}""")
 
+class Lift(QFrame):    
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.active = False
+
+        self.title = c.Title("Lift")
+        self.button = QPushButton("Up")
+
+        self.container = QGridLayout(self)
+        self.container.addWidget(self.title, 0, 0)
+        self.container.addWidget(self.button, 1, 0)
+
+    def set_text(self):
+        if self.active:
+            self.button.setText("Down")
+        else:
+            self.button.setText("Up")
+
+    def set_active(self, active: bool):
+        if self.active != active:
+            self.active = active
+            self.set_text()   
+
 class OpenClose(QFrame):
     def __init__(self, parent = None, name: str = "Reactor Valves", text_1: str = "Open", text_2: str = "Close"):
         super().__init__(parent)
@@ -128,19 +152,6 @@ class Value:
         text = str(self.get_value())
         self.display.setText(text)
 
-class Field:
-    def __init__(self, unit: str = "", value: float = 0.0, **kwargs):
-        self.value = value
-        super().__init__(**kwargs)
-
-        self.edit = QLineEdit(str(self.value), alignment=Qt.AlignmentFlag.AlignRight)
-        self.edit.setFixedWidth(100)
-        self.unit = QLabel(unit)
-        self.unit.setFixedWidth(50)
-
-        self.container.addWidget(self.edit, 0, 2, 1, 1, Qt.AlignmentFlag.AlignRight)
-        self.container.addWidget(self.unit, 0, 3, 1, 1, Qt.AlignmentFlag.AlignRight)
-
 class Toggle(ActiveRunning):
     def __init__(self, running_txt: str = "Deactivate", active_txt: str = "Deactivate", inactive_txt: str = "Activate", **kwargs):
         super().__init__(**kwargs)
@@ -149,8 +160,7 @@ class Toggle(ActiveRunning):
         self.inactive_txt = inactive_txt
 
         self.button = QPushButton(self.active_txt)
-        self.button.clicked.connect(self.toggle)
-
+    
         self.container.addWidget(self.button, 2, 0, 1, 2)
 
     def set_text(self):
@@ -162,22 +172,35 @@ class Toggle(ActiveRunning):
             self.button.setText(self.running_txt)
         self.set_color()
 
-    def toggle(self):
-        self.active = not self.active
-        self.set_text()
+    def set_active(self, active: bool):
+        if self.active != active:
+            self.active = active
+            self.set_text()
 
-class Peltier(ActiveRunning, Symbol):
-    def __init__(self, name: str = "Peltier", color: str = QColor.fromHslF(0.6, 0.95, 0.45).name(), nr: int = 1, **kwargs):
-        super().__init__(name = f"{name} {nr}", color = color, nr = nr, **kwargs)
+    def set_running(self, running: bool):
+        if self.running != running:
+            self.running = running
+            self.set_text()
 
-class Trap(Running, Value, Symbol):
-    def __init__(self, name: str = "Trap", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), unit: str = "\u00b0C", **kwargs):
-        super().__init__(name = name, color = color, unit = unit, **kwargs)
+    def reset(self):
+        self.set_running(False)
+        self.set_active(True)
 
-class Oven(ActiveRunning, Value, Symbol):
-    def __init__(self, name: str = "Oven", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), nr: int = 1, unit: str = "\u00b0C", **kwargs):
-        super().__init__(name = f"{name} {nr}", color = color, nr = nr, unit = unit, **kwargs)
+class Peltier(Toggle, Symbol):
+    def __init__(self, name: str = "Peltier", color: str = QColor.fromHslF(0.6, 0.95, 0.45).name(), running_txt: str = "Stop", active_txt: str = "Start", inactive_txt: str = "Activate", nr: int = 1, **kwargs):
+        super().__init__(name = f"{name} {nr}", color = color, running_txt = running_txt, active_txt = active_txt, inactive_txt = inactive_txt, nr = nr, **kwargs)
+        self.button.clicked.connect(lambda: self.set_running(not self.running))
 
+class Trap(Toggle, Value, Symbol):
+    def __init__(self, name: str = "Trap", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), running_txt: str = "Stop", active_txt: str = "Start", inactive_txt: str = "Activate", unit: str = "\u00b0C", **kwargs):
+        super().__init__(name = name, color = color, running_txt = running_txt, active_txt = active_txt, inactive_txt = inactive_txt, unit = unit, **kwargs)
+        self.button.clicked.connect(lambda: self.set_running(not self.running))
+
+class Oven(Toggle, Value, Symbol):
+    def __init__(self, name: str = "Oven", color: str = QColor.fromHslF(0, 0.95, 0.45).name(), nr: int = 1, running_txt: str = "Stop", active_txt: str = "Start", inactive_txt: str = "Activate", unit: str = "\u00b0C", **kwargs):
+        super().__init__(name = f"{name} {nr}", color = color, running_txt = running_txt, active_txt = active_txt, inactive_txt = inactive_txt, nr = nr, unit = unit, **kwargs)
+        self.button.clicked.connect(lambda: self.set_running(not self.running))
+        
 class Reactor(Toggle, Value, Symbol):
     def __init__(self, name: str = "Reactor", color: str = "grey", id: int = 0, nr: int = 1, unit = "mbar", **kwargs):
         super().__init__(name = f"{name} {nr}", color = QColor.fromHslF(id / 10, 0.65 + ((id + 7) % 3) / 7, 0.35 + ((id + 5) % 3) / 7).name(), id = id, nr = nr, unit = unit, **kwargs)
@@ -186,6 +209,8 @@ class Reactor(Toggle, Value, Symbol):
 
         self.set_running(True)
 
+        self.button.clicked.connect(lambda: self.set_running(not self.running))
+    
     def set(self, offset: float = 0.0, slope: float = 1.0):
         self.offset = offset
         self.slope = slope
@@ -209,45 +234,17 @@ class Display(Running, Symbol):
 
         self.container.addWidget(self.display, 1, 0, 1, 2)
 
-        self.set_running(False)
-
-class Edit(Field, Symbol):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
 class Auto(Toggle, Symbol):
     def __init__(self, color: str = QColor.fromHslF(0.6, 0.9, 0.3).name(), **kwargs):
         super().__init__(color=color, **kwargs)
 
-class Lift(QFrame):    
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.active = False
-
-        self.title = c.Title("Lift")
-        self.button = QPushButton("Up")
-
-        self.container = QGridLayout(self)
-        self.container.addWidget(self.title, 0, 0)
-        self.container.addWidget(self.button, 1, 0)
-
-    def set_text(self):
-        if self.active:
-            self.button.setText("Down")
-        else:
-            self.button.setText("Up")
-
-    def set_active(self, active: bool):
-        if self.active != active:
-            self.active = active
-            self.set_text()        
+        self.button.clicked.connect(lambda: self.set_active(not self.active))     
 
 class Schematic(QWidget):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
-        self.setFixedSize(1000, 950)
+        self.setFixedSize(1050, 950)
         self.setStyleSheet(c.styleSheet)
         with open("devices_config.json", "r") as f:
             self.config = json.load(f)

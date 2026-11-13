@@ -3,7 +3,7 @@ import json
 import time
 import os
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFrame, QComboBox, QFileDialog, QGridLayout, QTableView, QHeaderView, QMessageBox
-from PySide6.QtGui import QStandardItem, QStandardItemModel, QFont
+from PySide6.QtGui import QStandardItem, QStandardItemModel, QFont, QColor
 from PySide6.QtCore import Qt
 import pyqtgraph as pg
 import keller, smc, tm, peltier, tcpip
@@ -66,7 +66,7 @@ class History(QWidget):
         self.time.append(self.stamp / 60)
 
         for i, p in enumerate(self.pressures):
-            if not p.active:
+            if not p.running:
                 val = float('nan')
             else: 
                 val = p.get_value()
@@ -81,8 +81,8 @@ class History(QWidget):
         self.start = time.time()
 
     def default(self):
-        self.graph.enableAutoRange(axis='x')
         self.graph.setYRange(0, 2.1)
+        self.graph.enableAutoRange(axis='x')
 
     def auto(self):
         self.graph.getViewBox().autoRange()
@@ -93,6 +93,9 @@ class History(QWidget):
         self.history = [[] for _ in self.pressures]
         self.time = []
         self.default()
+
+        for curve in self.curves:
+            curve.setData([], [])
 
     def save(self, folder: str):
         time_snapshot = list(self.time)
@@ -301,6 +304,7 @@ class Logging(QFrame):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
+        self.color = QColor.fromHslF(0.6, 0.9, 0.3).name()
 
         self.title = c.Title("Logging", alignment=Qt.AlignmentFlag.AlignCenter)
         self.start = QPushButton("Start")
@@ -317,11 +321,20 @@ class Logging(QFrame):
         self.container.addWidget(self.start, 1, 0, 1, 1)
         self.container.addWidget(self.pause, 2, 0, 1, 1)
         self.container.addWidget(self.reset, 3, 0, 1, 1)
-        self.container.addWidget(self.load, 6, 0, 1, 1)
-        self.container.addWidget(self.save, 4, 0, 1, 1)
-        self.container.addWidget(self.store, 5, 0, 1, 1)        
+        self.container.addWidget(self.load, 4, 0, 1, 1)
+        self.container.addWidget(self.save, 5, 0, 1, 1)
+        self.container.addWidget(self.store, 6, 0, 1, 1)        
         self.container.addWidget(self.auto, 7, 0, 1, 1)
         self.container.addWidget(self.default, 8, 0, 1, 1)
+
+    def set_color(self):
+        color = self.color if self.running else "black"
+        self.title.setStyleSheet(f"background-color: {color};")
+
+    def set_running(self, running: bool):
+        if self.running != running:
+            self.running = running
+            self.set_color()
 
 class SidePanel(QWidget):
     def __init__(self, parent):
@@ -374,7 +387,6 @@ class Panel(QWidget):
         )
         self.auto.button.clicked.disconnect()
         self.auto.set_active(False)
-        self.auto.set_text()
         self.abort = c.Button(parent=self, name="Abort")
 
         self.conditioning = schematic.Auto(
@@ -459,15 +471,24 @@ class Control(QWidget):
         self.sidepanel.logging.auto.clicked.connect(self.graph.auto)
         self.sidepanel.logging.start.clicked.connect(lambda: self.graph.set_running(True))
         self.sidepanel.logging.pause.clicked.connect(lambda: self.graph.set_running(False))
-
+        self.sidepanel.logging.start.clicked.connect(lambda: self.sidepanel.logging.set_running(True))
+        self.sidepanel.logging.pause.clicked.connect(lambda: self.sidepanel.logging.set_running(False))
+        
         for v in self.schematic.valves:
             v.button.clicked.connect(self.request_wrapper(v))
-        self.schematic.lift.button.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], not self.schematic.lift.active))
+        self.schematic.lift.button.clicked.connect(lambda: self.smc.set([self.schematic.valve_lift.id], not self.schematic.lift.running))
+        for o in self.schematic.ovens:
+            o.button.clicked.connect(lambda: self.heater(o))
+        self.schematic.trap.button.clicked.connect(self.heater(self.schematic.trap))
+        for p in self.schematic.peltiers:
+            p.button.clicked.connect(lambda: self.cooler(p))
 
         self.worker.message.connect(self.panel.worker.display.setText)
         self.helper.message.connect(self.panel.helper.display.setText)
         self.worker.prompt.connect(self.prompt)
         self.helper.prompt.connect(self.prompt)
+        self.worker.end.connect(self.stop)
+        self.helper.end.connect(self.stop)
         self.smc_worker.update.connect(self.schematic.set_valves_active)
         self.keller_worker.update.connect(self.schematic.set_reactor_values)
         self.tm_worker.update.connect(self.schematic.set_heater_values)
@@ -493,14 +514,14 @@ class Control(QWidget):
             self.graph.set_running(True)
             self.panel.auto.set_active(True)
             self.panel.auto.set_running(True)
-            self.panel.auto.set_text()
+            self.sidepanel.logging.set_running(True)
             self.procedures.start()
         elif not self.panel.auto.running:
             self.panel.auto.set_running(True)
-            self.panel.auto.set_text()
+            self.sidepanel.logging.set_running(True)
         else: 
             self.panel.auto.set_running(False)
-            self.panel.auto.set_text()
+            self.sidepanel.logging.set_running(False)
         
     def reset(self):
         self.table.reset()
@@ -537,19 +558,12 @@ class Control(QWidget):
 
         self.panel.auto.set_active(False)
         self.panel.auto.set_running(False)
-        self.panel.auto.set_text()
 
-        self.panel.conditioning.set_active(True)
-        self.panel.conditioning.set_running(False)
-        self.panel.conditioning.set_text() # move funcs
+        self.panel.conditioning.reset()
+        self.panel.load_samples.reset()
+        self.panel.reaction.reset()
 
-        self.panel.load_samples.set_active(True)
-        self.panel.load_samples.set_running(False)
-        self.panel.load_samples.set_text() # move funcs
-
-        self.panel.reaction.set_active(True)
-        self.panel.reaction.set_running(False)
-        self.panel.reaction.set_text() # move funcs
+        self.sidepanel.logging.set_running(False)
 
         self.procedures.running = False
         self.worker.message.emit("")
@@ -579,14 +593,23 @@ class Control(QWidget):
             msg_box.setText(message)
             msg_box.exec()
 
+    def heater(self, heater):
+        if heater.running:
+            self.procedures.stop_heaters([heater])
+        elif heater.active:
+            self.procedures.start_heaters([heater], 500)
+
+    def cooler(self, cooler):
+        if cooler.running:
+            self.procedures.set_peltiers([cooler], 0)
+        elif cooler.active:
+            self.procedures.set_peltiers([cooler], 1)
+
     def request_wrapper(self, valve):
         return lambda: self.request(valve)
 
     def request(self, valve):
-            if valve.active:
-                self.smc.set([valve.id], 0)
-            else:
-                self.smc.set([valve.id], 1)
+        self.smc.set([valve.id], not valve.running)
 
     def closeEvent(self, event):
         self.stop()
